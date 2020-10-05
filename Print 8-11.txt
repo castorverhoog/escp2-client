@@ -1,0 +1,15 @@
+001
+Plasma 5mins 80 power 15steps
+Small Electrode Tiny electrode raster 10x3 spacing 60um large droplets 1x normal y 1x moved stage
+
+002
+lines left ro right 15 steps
+all raster H=6 W=1 Left:stage moved 2 times Middle: stage moved 1 time Right: stage not moved
+
+003
+Plasma treatment 2mins 80 power 20 steps
+H43 W=1 Med 2x Med 2x Large (1 moved, wrong sound) 2x large(right sound) 1x Large
+
+004
+No treatment 5 Steps
+H43 W=1 4x Large 2x Large (maybe 2 steps?)

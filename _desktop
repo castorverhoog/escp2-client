@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Positioning tool
+Version=1.0
+Icon=dot1.jpg
+Type=Application
+Exec=python3 /home/Desktop/GUI/simple_gui.py

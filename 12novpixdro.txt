@@ -1,0 +1,41 @@
+Silicone piece 121102
+
+001 First line 2mm, nozzle 7 DPI 500 Capt8
+002 3m gap nozzle 7 DPI 500 capt 9
+003 1mm gpa nozzle 7 DPI 500
+004 same as 003
+005 1mm gap nozzle 12 DPI 500 wierd behaviour in capt10
+006 same settings no wierd behaviour
+007 1mm gap nozzle 12 DPI500 x DPI 800 Y 
+008 printed up 1mm gap nozzle 12 DPI500 x DPI1000
+009 1mm gap nozzle 12 dpi 500xdpi 500
+010 1mm gap nozzle 7+12 500DPI capt13 Y offset?
+011 same print no wierd behaviour
+
+Next silicone piece 121103
+012 Nozzle 7+12 1mm gap DPI 500 Capt14-15 why the offset?
+013 Same with QF2 Snapshot 15 why the sattelites?7
+
+Next silicone Piece 121104
+001 plasma treadet P40 Time 2 mine cap17 missed fire
+002 capt18 why is it worse?
+003 line nozzle7+12
+
+Silicone Piece 121105
+Plasma P20 2Min
+1x electrode 9 6 1x electrode 12 9 1x tu delft 2.7 by 6
+
+Cap9 nozzle 12 stopped working
+
+Silicone Piece 1211006
+Line nozzle 7 2x
+
+Silicone Piece 1211007
+Plasma P20 2Min
+line .254mmx3mm 500dpi nozzle 4
+line .254x3mm 500dpi nozzle 8
+line .254x3mm 500dpi nozzle 12
+line .254x3mm 500dpi nozzle 4,8 QF2
+Vertical line .5*6mm 500DPi Nozzle 4,8,12 QF2
+cross 4,8,12 QF2
+cross nozzle 8

@@ -1,0 +1,8 @@
+1511001
+Upper row Lines
+.25 x 3mm Print speed 150
+line 1:400DPI, 2: 500DPI, 3:600DPI 4:700DPI 5: 800DPI 6: 800DPI (50speed) 7: electrode 4.5x3mm 500DPI
+
+1511002
+500DPI speed 150 Plasma cleaned P10 2min
+6.5x6.5 cross
