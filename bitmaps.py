@@ -14,5 +14,5 @@ def loadbitmap(str = "./bitmaps/toad-small.png"):
     return_array.append([])
     row = data[r]
     for c in range(len(row)):
-      return_array[r].append(round(np.mean(data[r][c])/255))
+      return_array[r].append(1 - round(np.mean(data[r][c])/255))
   return return_array
