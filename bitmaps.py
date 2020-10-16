@@ -5,7 +5,7 @@ import numpy as np
 
 def loadbitmap(str = "./bitmaps/toad-small.png"):
   # load the image
-  image = Image.open(str)
+  image = Image.open(str).rotate(90)
   # convert image to numpy array
   data = asarray(image)
   return_array = []
