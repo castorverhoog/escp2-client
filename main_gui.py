@@ -37,6 +37,7 @@ from subprocess import Popen
 from esc_functions import *
 from hex_functions import *
 from logos import *
+from bitmaps import *
 
 
 # =========================
@@ -284,6 +285,11 @@ def p_logo_TUPME(**kwargs):
 
 def p_logo_TUDelft(**kwargs):
     matrix = loadlogo(2)
+    rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
+    return rasterdata
+
+def p_bitmap_toad(**kwargs):
+    matrix = loadbitmap()
     rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
     return rasterdata
 
@@ -1507,6 +1513,19 @@ def load_patterns(event=None):
                     'stretch':      [False, 0],
                     'color' :       [True, 'black'],
                     'command' :     [p_logo_Job, 0]},
+        'bitmap toad' : {'posx':   [True, 166000],
+                    'posy':         [True, 5],
+                    'dx':           [False, 250],
+                    'dy':           [False, 0],
+                    'rdx':          [False, 0],
+                    'widthn':       [False, 6],
+                    'heightm':      [False, 10],
+                    'dropsize':     [True, 1],
+                    'fan':          [False, 0],
+                    'rep':          [True, 1],
+                    'stretch':      [False, 0],
+                    'color' :       [True, 'black'],
+                    'command' :     [p_bitmap_toad, 0]},
         'logo P' : {'posx':   [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],

@@ -1,25 +1,18 @@
 from PIL import Image
 from numpy import asarray
+import numpy as np
 
-# load the image
-image = Image.open("./bitmaps/toad.jpg")
-# convert image to numpy array
-data = asarray(image)
-print(type(data))
-# summarize shape
-print(data.shape)
-for row in data:
-  for cell in row:
-    for val in cell:
-      if(val != 0):
-        cell = 1
-      else:
-        
 
-# create Pillow image
-image2 = Image.fromarray(data)
-print(type(image2))
-
-# summarize image details
-print(image2.mode)
-print(image2.size)
+def loadbitmap(str = "./bitmaps/toad-small.png"):
+  # load the image
+  image = Image.open(str)
+  # convert image to numpy array
+  data = asarray(image)
+  return_array = []
+  # summarize shape
+  for r in range(len(data)):
+    return_array.append([])
+    row = data[r]
+    for c in range(len(row)):
+      return_array[r].append(round(np.mean(data[r][c])/255))
+  return return_array
