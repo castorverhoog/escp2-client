@@ -319,6 +319,12 @@ def p_logo_TUDelft(**kwargs):
     return rasterdata
 
 
+def p_logo_Job(**kwargs):
+    matrix = loadlogo(4)
+    rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
+    return rasterdata
+
+
 def p_nxm_sml(**kwargs):
     nozzlelist = createnozzlelist(nozzles, m, dy, fan)
     # dx = 1/120
@@ -542,6 +548,19 @@ def load_patterns(event=None):
                     'stretch':      [False, 0],
                     'color' :       [True, 'black'],
                     'command' :     [p_logo_TUDelft, 0]},
+        'logo JOB' : {'posx':   [True, 14],
+                    'posy':         [True, 5],
+                    'dx':           [False, 250],
+                    'dy':           [False, 0],
+                    'rdx':          [False, 0],
+                    'widthn':       [False, 6],
+                    'heightm':      [False, 10],
+                    'dropsize':     [True, 1],
+                    'fan':          [False, 0],
+                    'rep':          [True, 1],
+                    'stretch':      [False, 0],
+                    'color' :       [True, 'black'],
+                    'command' :     [p_logo_Job, 0]},
         '1-100 drops stacked' : {'posx': [True, 14],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
