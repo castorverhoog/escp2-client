@@ -293,6 +293,12 @@ def p_bitmap_toad(**kwargs):
     rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
     return rasterdata
 
+def p_bitmap(**kwargs):
+    print(file)
+    matrix = loadbitmap(file)
+    rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
+    return rasterdata
+
 def p_logo_P(**kwargs):
     matrix = loadlogo(3)
     rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
@@ -1372,6 +1378,7 @@ def load_patterns(event=None):
                     'posy':         [True,5],
                     'dx':           [True, 250],
                     'dy':           [True, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [True, 1],
                     'heightm':      [True, 1],
@@ -1385,6 +1392,7 @@ def load_patterns(event=None):
                     'posy':         [True,5],
                     'dx':           [True, 211.6666666666667],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 90],
                     'heightm':      [False, 90],
@@ -1398,6 +1406,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [True, 250],
                     'dy':           [True, 1],
+                    'file':         [False, ''],
                     'rdx':          [True, 5000],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1411,6 +1420,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [True, 500],
                     'dy':           [True, 2],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [True, 3],
@@ -1425,6 +1435,7 @@ def load_patterns(event=None):
                      'posy':        [True, 5],
                      'dx':          [True, 250],
                      'dy':          [True, 0],
+                    'file':         [False, ''],
                      'rdx':         [True, 5000],
                      'widthn':      [True, 6],
                      'heightm':     [True, 10],
@@ -1439,6 +1450,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1452,6 +1464,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1465,6 +1478,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1478,6 +1492,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1491,6 +1506,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1504,6 +1520,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1517,6 +1534,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1526,10 +1544,25 @@ def load_patterns(event=None):
                     'stretch':      [False, 0],
                     'color' :       [True, 'black'],
                     'command' :     [p_bitmap_toad, 0]},
+        'bitmap' : {'posx':   [True, 166000],
+                    'posy':         [True, 5],
+                    'dx':           [False, 250],
+                    'dy':           [False, 0],
+                    'file':         [True, './bitmaps/toad-small.png'],
+                    'rdx':          [False, 0],
+                    'widthn':       [False, 6],
+                    'heightm':      [False, 10],
+                    'dropsize':     [True, 1],
+                    'fan':          [False, 0],
+                    'rep':          [True, 1],
+                    'stretch':      [False, 0],
+                    'color' :       [True, 'black'],
+                    'command' :     [p_bitmap, 0]},
         'logo P' : {'posx':   [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1543,6 +1576,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 5000],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1556,6 +1590,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 5000],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -1595,6 +1630,7 @@ def load_patterns(event=None):
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
+                    'file':         [False, ''],
                     'rdx':          [False, 0],
                     'widthn':       [False, 6],
                     'heightm':      [False, 10],
@@ -2021,6 +2057,10 @@ def updatePatternParameters():
         tk.Spinbox(frame_patterns_par, from_=0, to=29, textvariable=patternDict['dy'][1], width=11, command=updateDyVar, validate='key', validatecommand=valint).grid(row=sR(),column=1, pady=2, padx=5, sticky="e")
         ttk.Label(frame_patterns_par, textvariable=dy_var).grid(row=sR(), column=2, sticky="w", pady=2)
 
+    if patterns[patternSelected]['file'][0]:
+        ttk.Label(frame_patterns_par, text='File select: ').grid(row=nR(), column=0, sticky="e", pady=2)
+        ttk.Entry(frame_patterns_par, textvariable=patternDict['file'][1], width=50).grid(row=nR(), column=1, sticky="e", pady=2)
+
     addEntry(frame_patterns_par, 'Raster width', 'dots', patternDict['widthn'][1], nR(), valcmd=valint) if patterns[patternSelected]['widthn'][0] else None
     addEntry(frame_patterns_par, 'Raster height', 'dots', patternDict['heightm'][1], nR(), valcmd=valint) if patterns[patternSelected]['heightm'][0] else None
     addEntry(frame_patterns_par, 'Distance between patterns', u'\u03bcm', patternDict['rdx'][1], nR(), valcmd=valflt) if patterns[patternSelected]['rdx'][0] else None
@@ -2029,6 +2069,8 @@ def updatePatternParameters():
     ttk.Radiobutton(frame_patterns_par, text='Small', variable=drop_size, value=1).grid(row=sR(), column=1, columnspan=2, sticky='sw', padx=3) if patterns[patternSelected]['dropsize'][0] else None
     ttk.Radiobutton(frame_patterns_par, text='Medium', variable=drop_size, value=2).grid(row=nR(), column=1, columnspan=2, sticky='w', padx=3) if patterns[patternSelected]['dropsize'][0] else None
     ttk.Radiobutton(frame_patterns_par, text='Large', variable=drop_size, value=3).grid(row=nR(), column=1, columnspan=2, sticky='w', padx=3) if patterns[patternSelected]['dropsize'][0] else None
+
+
 
     # advanced options....
     curRow=0
@@ -2116,7 +2158,7 @@ ParseOpt_var.set("None")
 
 
 def get_values(event=None):
-    global x, y, dx, dy, rdx, n, m, size, fan, rep, stretch
+    global x, y, dx, dy, rdx, n, m, size, fan, rep, stretch, file
     global pmgmt, vert, hor, mm, nozzles, d, pmid, umode
     global black, black2, black3, yellow, magenta, cyan, color
     global prnname, linux_name
@@ -2126,6 +2168,7 @@ def get_values(event=None):
     y = patternDict['posy'][1].get()/2.54 if patternDict['posy'][0] else 3
     dx = um_in(patternDict['dx'][1].get()) if patternDict['dx'][0] else um_in(250)
     dy = patternDict['dy'][1].get() if patternDict['dy'][0] else 0
+    file = patternDict['file'][1].get() if patternDict['file'][0] else ''
     rdx = um_in(patternDict['rdx'][1].get()) if patternDict['rdx'][0] else um_in(5000)
     n = patternDict['widthn'][1].get() if patternDict['widthn'][0] else 1
     m = patternDict['heightm'][1].get() if patternDict['heightm'][0] else 1
