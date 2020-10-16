@@ -2,22 +2,40 @@
 GUI for ESC P2 printer file generation
 
 Author:     R. Waasdorp
-Date:       20-11-2018
-Version:    1.4
+Date:       28-12-2016
+Version:    1.1
+
+
+Edited June 2019 by B. Brocken
+
+-Direct printing from GUI in Windows
+
 """
 
+# ---- Import modules ----
+# import binascii
+# import math
+# import copy
+# import os
 import subprocess
+# import unicodedata
 import string
+
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from tkinter import filedialog
 from tkinter import simpledialog
+from PIL import Image, ImageTk
+import serial
+import shutil
+from subprocess import Popen
+
+# from PIL import ImageTk, Image
+# import numpy as np
 
 from esc_functions import *
 from hex_functions import *
-from characters_gui import *
-# from patterns_gui import *
 from logos import *
 
 
@@ -28,9 +46,8 @@ LARGE_FONT = ("Verdana", 12)
 NORM_FONT = ("Verdana", 10)
 SMALL_FONT = ("Verdana", 8)
 
-# ==== DEFAULT SETTINGS ===
 patternSelected = 'nxm raster'
-printerSelected = 'SX235W'
+printerSelected = 'SX235'
 curRow = 0
 
 colorNames = ['black', 'black2', 'black3', 'magenta', 'cyan', 'yellow']
@@ -57,17 +74,6 @@ dotOpt = {
 }
 
 # PRINTER MODELS + SPECS
-"""
-New printers can be added to this dictionary
-- The provided linux-name can be used to directly print to this printer using
-  the command:
-    lp -d <linux-name> -oraw <file>
-- The prn files with the header and footer should be located in the folder:
-    prns/<prnfiles>
-- Unit and color information can be found in a spec sheet of the printer,
-  or by generating some output and parsing it with the escp2-parse Perl script
-
-"""
 printersParDict = {
     'SX600FW' : {'pmgmt' : 720,
                 'vert': 720,
@@ -75,9 +81,6 @@ printersParDict = {
                 'm': 5760,
                 'nozzles' : 128,
                 'black' : b'\x60',
-                'magenta' : None,
-                'cyan' : None,
-                'yellow' : None,
                 'd' : 'VSD2',
                 'pmid' : 'Normal2',
                 'linux-name': 'printer-sx600fw',
@@ -93,15 +96,15 @@ printersParDict = {
                 'magenta' : b'\x01',
                 'cyan' : b'\x02',
                 'yellow' : b'\x04',
-                'd': 'VSD1',
+                'd': 'VSD2',
                 'pmid': 'Normal1',
                 'linux-name': 'printer-sx235w',
                 'prnfiles': 'sx235w'},
-    'SX235W-HR': {'pmgmt': 1440,
+    'SX235': {'pmgmt': 1440,
                 'vert': 1440,
                 'hor': 5760,
                 'm': 5760,
-                'nozzles': 30,
+                'nozzles': 43,
                 'black': b'\x00',
                 'black2' : b'\x05',
                 'black3' : b'\x06',
@@ -110,32 +113,14 @@ printersParDict = {
                 'yellow' : b'\x04',
                 'd': 'VSD2',
                 'pmid': 'Highres',
-                'linux-name': 'printer-sx235w',
+                'linux-name': 'printer-sx235',
                 'prnfiles': 'sx235w-highres'},
-    'L120': {'pmgmt': 720,
-                'vert': 720,
-                'hor': 5760,
-                'm': 5760,
-                'nozzles': 60,
-                'black': b'\x00',
-                'black2' : None,
-                'black3' : None,
-                'magenta' : b'\x01',
-                'cyan' : b'\x02',
-                'yellow' : b'\x04',
-                'd': 'VSD1',
-                'pmid': 'Normal1',
-                'linux-name': 'printer-l120',
-                'prnfiles': 'l120'},
     'DX6050': {'pmgmt': 720,
                 'vert': 720,
                 'hor': 720,
                 'm': 2880,
                 'nozzles': 90,
                 'black': b'\x00',
-                'magenta' : None,
-                'cyan' : None,
-                'yellow' : None,
                 'd': 'Economy',
                 'pmid': 'None',
                 'linux-name': 'printer-dx6050',
@@ -155,10 +140,19 @@ printersParDict = {
                 'pmid': 'None',
                 'linux-name': 'manual',
                 'prnfiles': 'manual'
-               }
-    # add new printer here:
-    # 'new_printer': {'name':value,}
-    }
+               } }
+
+
+
+
+
+
+
+
+
+
+
+
 
 # =========================
 # ==== ESCP2 FUNCTIONS ====
@@ -166,22 +160,19 @@ printersParDict = {
 
 def p1_small(**kwargs):
     nozzlelist = createnozzlelist(29, 1, 0, fan)
-    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + \
-        ESC_i_nrs(nozzlelist, color, 1) + b'\x0c'
+    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + ESC_i_nrs(nozzlelist, color, 1) + b'\x0c'
     return rasterdata
 
 
 def p1_med(**kwargs):
     nozzlelist = createnozzlelist(29, 1, 0, fan)
-    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + \
-        ESC_i_nrs(nozzlelist, color, 2) + b'\x0c'
+    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + ESC_i_nrs(nozzlelist, color, 2) + b'\x0c'
     return rasterdata
 
 
 def p1_large(**kwargs):
     nozzlelist = createnozzlelist(29, 1, 0, fan)
-    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + \
-        ESC_i_nrs(nozzlelist, color, 3) + b'\x0c'
+    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + ESC_i_nrs(nozzlelist, color, 3) + b'\x0c'
     return rasterdata
 
 
@@ -196,36 +187,24 @@ def p_all_nozzles(**kwargs):
     # y = y
     raster1 = b''
     for k in range(5):
-        raster1 += ESC_dollar(hor, (x1 + dx * k)) + \
-                   ESC_i_nrs(nozzlelist, black, size1) + \
-                   ESC_dollar(hor, (x1 + (dx * 6) + dx * k)) + \
-                   ESC_i_nrs(nozzlelist, cyan, size1) + \
-                   ESC_dollar(hor, (x1 + (dx * 12) + dx * k)) + \
-                   ESC_i_nrs(nozzlelist, magenta, size1) + \
-                   ESC_dollar(hor, (x1 + (dx * 18) + dx * k)) + \
-                   ESC_i_nrs(nozzlelist, yellow, size1)
+        raster1 += ESC_dollar(hor, (x1 + dx * k)) + ESC_i_nrs(nozzlelist, black, size1) + \
+                   ESC_dollar(hor, (x1 + (dx * 6) + dx * k)) + ESC_i_nrs(nozzlelist, cyan, size1) + \
+                   ESC_dollar(hor, (x1 + (dx * 12) + dx * k)) + ESC_i_nrs(nozzlelist, magenta, size1) + \
+                   ESC_dollar(hor, (x1 + (dx * 18) + dx * k)) + ESC_i_nrs(nozzlelist, yellow, size1)
     raster2 = b''
     for k in range(5):
-        raster2 += ESC_dollar(hor, x2 + dx*k) + \
-                   ESC_i_nrs(nozzlelist, black, size2) + \
-                   ESC_dollar(hor, x2 + (dx*6) + dx*k) + \
-                   ESC_i_nrs(nozzlelist, cyan, size2) + \
-                   ESC_dollar(hor, x2 + (dx*12) + dx*k) + \
-                   ESC_i_nrs(nozzlelist, magenta, size2) + \
-                   ESC_dollar(hor, x2 + (dx*18) + dx*k) + \
-                   ESC_i_nrs(nozzlelist, yellow, size2)
+        raster2 += ESC_dollar(hor, x2 + dx*k) + ESC_i_nrs(nozzlelist, black, size2) + \
+                   ESC_dollar(hor, x2 + (dx*6) + dx*k) + ESC_i_nrs(nozzlelist, cyan, size2) + \
+                   ESC_dollar(hor, x2 + (dx*12) + dx*k) + ESC_i_nrs(nozzlelist, magenta, size2) + \
+                   ESC_dollar(hor, x2 + (dx*18) + dx*k) + ESC_i_nrs(nozzlelist, yellow, size2)
         print(k)
     raster3 = b''
     for k in range(5):
-        raster3 += ESC_dollar(hor, x3 + dx * k) + \
-                   ESC_i_nrs(nozzlelist, black, size3) + \
-                   ESC_dollar(hor, x3 + (dx * 6) + dx * k) + \
-                   ESC_i_nrs(nozzlelist, cyan, size3) + \
-                   ESC_dollar(hor, x3 + (dx * 12) + dx * k) + \
-                   ESC_i_nrs(nozzlelist, magenta, size3) + \
-                   ESC_dollar(hor, x3 + (dx * 18) + dx * k) + \
-                   ESC_i_nrs(nozzlelist, yellow, size3)
-    rasterdata = ESC_v(pmgmt, y) + (raster1 + raster2 + raster3)*rep + b'\x0c'
+        raster3 += ESC_dollar(hor, x3 + dx * k) + ESC_i_nrs(nozzlelist, black, size3) + \
+                   ESC_dollar(hor, x3 + (dx * 6) + dx * k) + ESC_i_nrs(nozzlelist, cyan, size3) + \
+                   ESC_dollar(hor, x3 + (dx * 12) + dx * k) + ESC_i_nrs(nozzlelist, magenta, size3) + \
+                   ESC_dollar(hor, x3 + (dx * 18) + dx * k) + ESC_i_nrs(nozzlelist, yellow, size3)
+    rasterdata = ESC_v(pmgmt, y) + (raster1 + raster2 + raster3) * rep + b'\x0c'
     return rasterdata
 
 
@@ -237,29 +216,21 @@ def p1_10_drops(**kwargs):
     for k in range(9):
         raster += ESC_dollar(hor, x + dx) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(8):
-        raster += ESC_dollar(hor, x + dx * 2) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 2) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(7):
-        raster += ESC_dollar(hor, x + dx * 3) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 3) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(6):
-        raster += ESC_dollar(hor, x + dx * 4) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 4) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(5):
-        raster += ESC_dollar(hor, x + dx * 5) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 5) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(4):
-        raster += ESC_dollar(hor, x + dx * 6) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 6) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(3):
-        raster += ESC_dollar(hor, x + dx * 7) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 7) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(2):
-        raster += ESC_dollar(hor, x + dx * 8) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 8) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(1):
-        raster += ESC_dollar(hor, x + dx * 9) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 9) + ESC_i_nrs(nozzlelist, color, size)
     rasterdata = ESC_v(pmgmt, y) + raster + b'\x0c'
     return rasterdata
 
@@ -268,8 +239,7 @@ def p_raster_nxm(**kwargs):
     nozzlelist = createnozzlelist(nozzles, m, dy, fan)
     raster = b''
     for k in range(n):
-        raster += rep * (ESC_dollar(hor, (x + dx * k)) +
-                         ESC_i_nrs(nozzlelist, color, size))
+        raster += (ESC_dollar(hor, (x + dx * k)) + ESC_i_nrs(nozzlelist, color, size)) * rep
     rasterdata = ESC_v(pmgmt, y) + raster + b'\x0c'
     return rasterdata
 
@@ -297,24 +267,28 @@ def p_logo_pme_mne(**kwargs):
     dx = (dy + 1) * (1 / 120)
     size1 = 3
     size2 = 1
-    rasterdata = ESC_v(pmgmt, y) + (createP(x=x, r=color, size=size1, fn=fan, pmgmt=pmgmt, hor=hor, vert=vert) +
-            createM(x=(x + 6 * dx), r=color, size=size1, fn=fan, pmgmt=pmgmt, hor=hor, vert=vert) +
-            createE(x=(x + 12 * dx), r=color, size=size1, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert) +
-            createM(x=(x + dx * 20), r=color, size=size2, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert) +
-            createN(x=(x + 26 * dx), r=color, size=size2, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert) +
-            createE(x=(x + 32 * dx), r=color, size=size2, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert))*rep + b'\x0c'
+    rasterdata = ESC_v(pmgmt, y) + (createP(x=x, r=color, size=3, fn=fan, pmgmt=pmgmt, hor=hor, vert=vert) +
+            createM(x=(x + 6 * dx), r=color, size=3, fn=fan, pmgmt=pmgmt, hor=hor, vert=vert) +
+            createE(x=(x + 12 * dx), r=color, size=3, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert) +
+            createM(x=(x + dx * 20), r=color, size=3, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert) +
+            createN(x=(x + 26 * dx), r=color, size=3, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert) +
+            createE(x=(x + 32 * dx), r=color, size=3, fn=fan, pmgmt=pmgmt, hor=hor,vert=vert))*rep + b'\x0c'
 
     return rasterdata
 
 
 def p_logo_TUPME(**kwargs):
-    rasterdata = printTUPME(x, y, size, color, rep, pmgmt=pmgmt, hor=hor,
-                            vert=vert)
+    rasterdata = printTUPME(x, y, size, color, rep, pmgmt=pmgmt, hor=hor, vert=vert)
     return rasterdata
 
 
 def p_logo_TUDelft(**kwargs):
     matrix = loadlogo(2)
+    rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
+    return rasterdata
+
+def p_logo_P(**kwargs):
+    matrix = loadlogo(3)
     rasterdata = ESC_v(pmgmt, y) + (printLOGO(matrix, x, y, size, color, pmgmt=pmgmt, hor=hor, vert=vert)) * rep + b'\x0c'
     return rasterdata
 
@@ -357,35 +331,998 @@ def p_1_100_drops(**kwargs):
     for k in range(80):
         raster += ESC_dollar(hor, x + dx) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(60):
-        raster += ESC_dollar(hor, x + dx * 2) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 2) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(40):
-        raster += ESC_dollar(hor, x + dx * 3) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 3) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(20):
-        raster += ESC_dollar(hor, x + dx * 4) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 4) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(10):
-        raster += ESC_dollar(hor, x + dx * 5) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 5) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(5):
-        raster += ESC_dollar(hor, x + dx * 6) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 6) + ESC_i_nrs(nozzlelist, color, size)
     for k in range(1):
-        raster += ESC_dollar(hor, x + dx * 4) + \
-                  ESC_i_nrs(nozzlelist, color, size)
+        raster += ESC_dollar(hor, x + dx * 4) + ESC_i_nrs(nozzlelist, color, size)
     rasterdata = ESC_v(pmgmt, y) + raster + b'\x0c'
     return rasterdata
 
 
 def p_logo_TU_fast(**kwargs):
     # stretch = int(input('horizontal stretch between dots (def=3): '))
-    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + \
-                 ESC_i_matrix(color, load_logo_fast(), stretch, size, fan) + \
-                 b'\x0c'
+    rasterdata = ESC_v(pmgmt, y) + ESC_dollar(hor, x) + ESC_i_matrix(color, load_logo_fast(), stretch, size, fan) + b'\x0c'
     return rasterdata
 
-# =======================
+def p_black_line(**kwargs):
+    nozzlelist = createnozzlelist(42,42,0,0)
+    size = 1
+    raster1 = b''
+    raster2 = b''
+    raster3 = b''
+	# color = black
+    for k in range(1):
+        raster1 += ESC_dollar(hor,x+dx*k) + ESC_i_nrs(nozzlelist,color,size)
+        #raster2 += ESC_dollar(hor,x+dx*k) + ESC_i_nrs(nozzlelist,black2,size)
+        #raster3 += ESC_dollar(hor,x+dx*k) + ESC_i_nrs(nozzlelist,black3,size)
+        rasterdata = ESC_v(pmgmt,y) + raster1+ b'\x0c'
+        return rasterdata
+
+def p_electrode_tiny(**kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 240)
+    rasterdata = ESC_v(pmgmt, y) + (createElectrodeTiny(x, size=size, pmgmt=pmgmt, hor=hor, vert=vert, r=color))*rep + b'\x0c'
+    return rasterdata
+
+def p_electrode_small(**kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    rasterdata = ESC_v(pmgmt, y) + (createElectrode_small(x, size=size, pmgmt=pmgmt, hor=hor, vert=vert, r=color))*rep + b'\x0c'
+    return rasterdata
+
+def p_alok_grid(**kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    rasterdata = ESC_v(pmgmt, y) + (createAlok(x, size=size, pmgmt=pmgmt, hor=hor, vert=vert, r=color))*rep + b'\x0c'
+    return rasterdata
+    
+def p_electrode(**kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    rasterdata = ESC_v(pmgmt, y) + (createElectrode_silver(x, size=size, pmgmt=pmgmt, hor=hor, vert=vert, r=color))*rep + b'\x0c'
+    return rasterdata
+
+
+# =============================
+# ==== CHARACTER FUNCTIONS ====
+# =============================
+
+
+
+
+def createPs(x, r=b'\x00', size=1, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1, 2, 3, 4, 5])
+    list2 = createnozzlelistsp(29, [1, 3])
+    list3 = createnozzlelistsp(29, [1, 2, 3])
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+def createAloknope(x, size=1, r=b'\x00', **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1/120)
+    hor= 5760
+    
+    list1 = createnozzlelistsp(42, [25])
+    list2 = createnozzlelistsp(42, [25])
+    list4 = createnozzlelistsp(42, [25])
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor, x + 2 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 4 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 14 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 25 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 25 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 26 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 27 * dx) + ESC_i_nrs(list2, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+def createAlok(x, size=1, r=b'\x00', **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1/150)
+    hor= 5760
+    
+    list1 = createnozzlelistsp(42, [15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41])
+    list2 = createnozzlelistsp(42, [15,41])
+    list11 = createnozzlelistsp(42,[15,28,41])
+    list12 = createnozzlelistsp(42,[15,28,41])
+    list13 = createnozzlelistsp(42,[15,28,41])
+    list14 = createnozzlelistsp(42,[15,28,41])
+    list15 = createnozzlelistsp(42,[15,28,41])
+    list27 = createnozzlelistsp(42, [27])
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor, x + 2 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 4 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 5 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 6 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 7 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 8 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 9 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 10 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 11 * dx) + ESC_i_nrs(list11, r, size) + \
+            ESC_dollar(hor, x + 12 * dx) + ESC_i_nrs(list11, r, size) + \
+            ESC_dollar(hor, x + 13 * dx) + ESC_i_nrs(list11, r, size) + \
+            ESC_dollar(hor, x + 14 * dx) + ESC_i_nrs(list11, r, size) + \
+            ESC_dollar(hor, x + 15 * dx) + ESC_i_nrs(list11, r, size) + \
+            ESC_dollar(hor, x + 16 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 17 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 18 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 19 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 20 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 21 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 22 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 23 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 24 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 25 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 26 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 27 * dx) + ESC_i_nrs(list27, r, size) 
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+    
+def createDiamond(x, size=1, r=b'\x00', **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1/45)
+    hor= 5760
+    
+    list1 = createnozzlelistsp(42, [1,2,3,4,5,6])
+    list2 = createnozzlelistsp(42, [1,2,3,4,5])
+    list3 = createnozzlelistsp(42, [1,2,3,4])
+    list4 = createnozzlelistsp(42, [1,2])
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    '''image = ESC_dollar(hor, x) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + .25 * dx) + ESC_i_nrs(list4, r,size) + \
+            ESC_dollar(hor, x + .5 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + .75 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 1 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 1.2 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 1.4 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 1.6 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 1.7 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 1.8 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 2 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 2.1 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 2.2 * dx) + ESC_i_nrs(list4, r, size)'''
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor, x + 1 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 2 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + 4 * dx) + ESC_i_nrs(list2, r, size) + \
+            ESC_dollar(hor, x + 5 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 6 * dx) + ESC_i_nrs(list4, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createMs(x, size=1, r=b'\x00', **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1, 2, 3, 4, 5])
+    list2 = createnozzlelistsp(29, [2])
+    list3 = createnozzlelistsp(29, [1, 2, 3, 4, 5])
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+def createElectrode_small(x, size=1, r=b'\x00', **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1/90)
+    hor= 5760
+    
+    list1a = createnozzlelistsp(43, [16,17,18,19,20])
+    list1aa = createnozzlelistsp(43, [15,16,17,18,19,20,21])
+    list2a = createnozzlelistsp(43, [13,14,15,16,17,18,19,20,21,22,23])
+    list2aa = createnozzlelistsp(43, [12,13,14,15,16,17,18,19,20,21,22,23,24])
+    list3a = createnozzlelistsp(43, [11,12,13,14,15,16,17,18,19,20,21,22,23,24,25])
+    list3aa = createnozzlelistsp(43, [10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26])
+    list4a = createnozzlelistsp(43, [9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27])
+    list4aa = createnozzlelistsp(43, [8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28])
+    list5a = createnozzlelistsp(43, [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30])
+    list6a = createnozzlelistsp(43, [5,6,7,8,9,10,11,12,13,14,15,21,22,23,24,25,26,27,28,29,30,31,32])
+    list7a = createnozzlelistsp(43, [4,5,6,7,8,9,10,11,12,24,25,26,27,28,29,30,31,32,33,34])
+    list8a = createnozzlelistsp(43, [3,4,5,6,7,8,9,10,26,27,28,29,30,31,32,33,34,35,36])
+    list9a = createnozzlelistsp(43, [2,3,4,5,6,7,8,14,15,16,17,18,19,20,21,22,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list10a = createnozzlelistsp(43, [1,2,3,4,5,6,12,13,14,15,16,17,18,19,20,21,22,23,24,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list11a = createnozzlelistsp(43, [0,1,2,3,4,5,6,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26])
+    list12a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27])
+    list13a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list14a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list15a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list23a = createnozzlelistsp(43, [6,7,8,9,10,11,12,13,14,15,21,22,23,24,25,26,27,28,29,30])
+    list24a = createnozzlelistsp(43, [9,10,11,12,13,14,15,21,22,23,24,25,26,27])
+    list25a = createnozzlelistsp(43, [11,12,13,14,15,21,22,23,24,25])
+    list26a = createnozzlelistsp(43, [13,14,15,21,22,23])
+
+    
+    
+    m = len(list1a)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1a, r, size) + \
+            ESC_dollar(hor, x + 0.5 * dx) + ESC_i_nrs(list1aa, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2a, r, size) + \
+            ESC_dollar(hor, x + 1.5 * dx) + ESC_i_nrs(list2aa, r, size) + \
+            ESC_dollar(hor, x + 2 * dx) + ESC_i_nrs(list3a, r, size) + \
+            ESC_dollar(hor, x + 2.5 * dx) + ESC_i_nrs(list3aa, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4a, r, size) + \
+            ESC_dollar(hor, x + 3.5 * dx) + ESC_i_nrs(list4aa, r, size) + \
+            ESC_dollar(hor, x + 4 * dx) + ESC_i_nrs(list5a, r, size) + \
+            ESC_dollar(hor, x + 4.5 * dx) + ESC_i_nrs(list5a, r, size) + \
+            ESC_dollar(hor, x + 5 * dx) + ESC_i_nrs(list6a, r, size) + \
+            ESC_dollar(hor, x + 5.5 * dx) + ESC_i_nrs(list6a, r, size) + \
+            ESC_dollar(hor, x + 6 * dx) + ESC_i_nrs(list7a, r, size) + \
+            ESC_dollar(hor, x + 6.5 * dx) + ESC_i_nrs(list7a, r, size) + \
+            ESC_dollar(hor, x + 7 * dx) + ESC_i_nrs(list8a, r, size) + \
+            ESC_dollar(hor, x + 7.5 * dx) + ESC_i_nrs(list8a, r, size) + \
+            ESC_dollar(hor, x + 8 * dx) + ESC_i_nrs(list9a, r, size) + \
+            ESC_dollar(hor, x + 8.5 * dx) + ESC_i_nrs(list9a, r, size) + \
+            ESC_dollar(hor, x + 9 * dx) + ESC_i_nrs(list10a, r, size) + \
+            ESC_dollar(hor, x + 9.5 * dx) + ESC_i_nrs(list10a, r, size) + \
+            ESC_dollar(hor, x + 10 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 10.5 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 11 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 11.5 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 12 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 12.5 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 13 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 13.5 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 14 * dx) + ESC_i_nrs(list15a, r, size) + \
+            ESC_dollar(hor, x + 14.5 * dx) + ESC_i_nrs(list15a, r, size) + \
+            ESC_dollar(hor, x + 15 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 15.5 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 16 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 16.5 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 17 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 17.5 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 18 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 18.5 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 19 * dx) + ESC_i_nrs(list10a, r, size) + \
+            ESC_dollar(hor, x + 19.5 * dx) + ESC_i_nrs(list10a, r, size) + \
+            ESC_dollar(hor, x + 20 * dx) + ESC_i_nrs(list9a, r, size) + \
+            ESC_dollar(hor, x + 20.5 * dx) + ESC_i_nrs(list9a, r, size) + \
+            ESC_dollar(hor, x + 21 * dx) + ESC_i_nrs(list8a, r, size) + \
+            ESC_dollar(hor, x + 21.5 * dx) + ESC_i_nrs(list8a, r, size) + \
+            ESC_dollar(hor, x + 22 * dx) + ESC_i_nrs(list7a, r, size) + \
+            ESC_dollar(hor, x + 22.5 * dx) + ESC_i_nrs(list7a, r, size) + \
+            ESC_dollar(hor, x + 23 * dx) + ESC_i_nrs(list6a, r, size) + \
+            ESC_dollar(hor, x + 23.5 * dx) + ESC_i_nrs(list6a, r, size) + \
+            ESC_dollar(hor, x + 24 * dx) + ESC_i_nrs(list23a, r, size) + \
+            ESC_dollar(hor, x + 24.5 * dx) + ESC_i_nrs(list23a, r, size) + \
+            ESC_dollar(hor, x + 25 * dx) + ESC_i_nrs(list24a, r, size) + \
+            ESC_dollar(hor, x + 25.5 * dx) + ESC_i_nrs(list24a, r, size) + \
+            ESC_dollar(hor, x + 26 * dx) + ESC_i_nrs(list25a, r, size) + \
+            ESC_dollar(hor, x + 26.5 * dx) + ESC_i_nrs(list25a, r, size) + \
+            ESC_dollar(hor, x + 27 * dx) + ESC_i_nrs(list26a, r, size)
+
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+   
+
+def createElectrode_silver(x, size=1, r=b'\x00', **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1/90)
+    hor= 5760
+    
+    list1a = createnozzlelistsp(43, [16,17,18,19,20])
+    list1aa = createnozzlelistsp(43, [15,16,17,18,19,20,21])
+    list2a = createnozzlelistsp(43, [13,14,15,16,17,18,19,20,21,22,23])
+    list2aa = createnozzlelistsp(43, [12,13,14,15,16,17,18,19,20,21,22,23,24])
+    list3a = createnozzlelistsp(43, [11,12,13,14,15,16,17,18,19,20,21,22,23,24,25])
+    list3aa = createnozzlelistsp(43, [10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26])
+    list4a = createnozzlelistsp(43, [9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27])
+    list4aa = createnozzlelistsp(43, [8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28])
+    list5a = createnozzlelistsp(43, [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30])
+    list6a = createnozzlelistsp(43, [5,6,7,8,9,10,11,12,13,14,15,21,22,23,24,25,26,27,28,29,30,31,32])
+    list7a = createnozzlelistsp(43, [4,5,6,7,8,9,10,11,12,24,25,26,27,28,29,30,31,32,33,34])
+    list8a = createnozzlelistsp(43, [3,4,5,6,7,8,9,10,26,27,28,29,30,31,32,33,34,35,36])
+    list9a = createnozzlelistsp(43, [2,3,4,5,6,7,8,14,15,16,17,18,19,20,21,22,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list10a = createnozzlelistsp(43, [1,2,3,4,5,6,12,13,14,15,16,17,18,19,20,21,22,23,24,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list11a = createnozzlelistsp(43, [0,1,2,3,4,5,6,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26])
+    list12a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27])
+    list13a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list14a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list15a = createnozzlelistsp(43, [0,1,2,3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list18a = createnozzlelistsp(43, [1,2,3,4,5,6,12,13,14,15,16,17,18,19,20,21,22,23,24])
+    list18silver = createnozzlelistsp(43, [29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list19a = createnozzlelistsp(43, [2,3,4,5,6,7,8,14,15,16,17,18,19,20,21,22])
+    list19silver = createnozzlelistsp(43, [28,29,30,31,32,33,34,35,36,37,38,39,40,41,42])
+    list20a = createnozzlelistsp(43, [3,4,5,6,7,8,9,10])
+    list20silver = createnozzlelistsp(43, [26,27,28,29,30,31,32,33,34,35,36])
+    list21a = createnozzlelistsp(43, [4,5,6,7,8,9,10,11,12])
+    list21silver = createnozzlelistsp(43, [24,25,26,27,28,29,30,31,32,33,34])
+    list22a = createnozzlelistsp(43, [5,6,7,8,9,10,11,12,13,14,15])
+    list22silver = createnozzlelistsp(43, [21,22,23,24,25,26,27,28,29,30,31,32])
+    list23a = createnozzlelistsp(43, [6,7,8,9,10,11,12,13,14,15])
+    list23silver = createnozzlelistsp(43, [21,22,23,24,25,26,27,28,29,30])
+    list24a = createnozzlelistsp(43, [9,10,11,12,13,14,15])
+    list24silver = createnozzlelistsp(43, [21,22,23,24,25,26,27])
+    list25a = createnozzlelistsp(43, [11,12,13,14,15])
+    list25silver = createnozzlelistsp(43, [21,22,23,24,25])
+    list26a = createnozzlelistsp(43, [13,14,15])
+    list26silver = createnozzlelistsp(43, [21,22,23])
+
+    
+    
+    m = len(list1a)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1a, r, size) + \
+            ESC_dollar(hor, x + 0.5 * dx) + ESC_i_nrs(list1aa, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2a, r, size) + \
+            ESC_dollar(hor, x + 1.5 * dx) + ESC_i_nrs(list2aa, r, size) + \
+            ESC_dollar(hor, x + 2 * dx) + ESC_i_nrs(list3a, r, size) + \
+            ESC_dollar(hor, x + 2.5 * dx) + ESC_i_nrs(list3aa, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4a, r, size) + \
+            ESC_dollar(hor, x + 3.5 * dx) + ESC_i_nrs(list4aa, r, size) + \
+            ESC_dollar(hor, x + 4 * dx) + ESC_i_nrs(list5a, r, size) + \
+            ESC_dollar(hor, x + 4.5 * dx) + ESC_i_nrs(list5a, r, size) + \
+            ESC_dollar(hor, x + 5 * dx) + ESC_i_nrs(list6a, r, size) + \
+            ESC_dollar(hor, x + 5.5 * dx) + ESC_i_nrs(list6a, r, size) + \
+            ESC_dollar(hor, x + 6 * dx) + ESC_i_nrs(list7a, r, size) + \
+            ESC_dollar(hor, x + 6.5 * dx) + ESC_i_nrs(list7a, r, size) + \
+            ESC_dollar(hor, x + 7 * dx) + ESC_i_nrs(list8a, r, size) + \
+            ESC_dollar(hor, x + 7.5 * dx) + ESC_i_nrs(list8a, r, size) + \
+            ESC_dollar(hor, x + 8 * dx) + ESC_i_nrs(list9a, r, size) + \
+            ESC_dollar(hor, x + 8.5 * dx) + ESC_i_nrs(list9a, r, size) + \
+            ESC_dollar(hor, x + 9 * dx) + ESC_i_nrs(list10a, r, size) + \
+            ESC_dollar(hor, x + 9.5 * dx) + ESC_i_nrs(list10a, r, size) + \
+            ESC_dollar(hor, x + 10 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 10.5 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 11 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 11.5 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 12 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 12.5 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 13 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 13.5 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 14 * dx) + ESC_i_nrs(list15a, r, size) + \
+            ESC_dollar(hor, x + 14.5 * dx) + ESC_i_nrs(list15a, r, size) + \
+            ESC_dollar(hor, x + 15 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 15.5 * dx) + ESC_i_nrs(list14a, r, size) + \
+            ESC_dollar(hor, x + 16 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 16.5 * dx) + ESC_i_nrs(list13a, r, size) + \
+            ESC_dollar(hor, x + 17 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 17.5 * dx) + ESC_i_nrs(list12a, r, size) + \
+            ESC_dollar(hor, x + 18 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 18.5 * dx) + ESC_i_nrs(list11a, r, size) + \
+            ESC_dollar(hor, x + 19 * dx) + ESC_i_nrs(list18a, r, size) + \
+            ESC_dollar(hor, x + 19 * dx) + ESC_i_nrs(list18silver, magenta, size) + \
+            ESC_dollar(hor, x + 19.5 * dx) + ESC_i_nrs(list18a, r, size) + \
+            ESC_dollar(hor, x + 19.5 * dx) + ESC_i_nrs(list18silver, magenta, size) + \
+            ESC_dollar(hor, x + 20 * dx) + ESC_i_nrs(list19a, r, size) + \
+            ESC_dollar(hor, x + 20 * dx) + ESC_i_nrs(list19silver, magenta, size) + \
+            ESC_dollar(hor, x + 20.5 * dx) + ESC_i_nrs(list19a, r, size) + \
+            ESC_dollar(hor, x + 20.5 * dx) + ESC_i_nrs(list19silver, magenta, size) + \
+            ESC_dollar(hor, x + 21 * dx) + ESC_i_nrs(list20a, r, size) + \
+            ESC_dollar(hor, x + 21 * dx) + ESC_i_nrs(list20silver, magenta, size) + \
+            ESC_dollar(hor, x + 21.5 * dx) + ESC_i_nrs(list20a, r, size) + \
+            ESC_dollar(hor, x + 21.5 * dx) + ESC_i_nrs(list20silver, magenta, size) + \
+            ESC_dollar(hor, x + 22 * dx) + ESC_i_nrs(list21a, r, size) + \
+            ESC_dollar(hor, x + 22 * dx) + ESC_i_nrs(list21silver, magenta, size) + \
+            ESC_dollar(hor, x + 22.5 * dx) + ESC_i_nrs(list21a, r, size) + \
+            ESC_dollar(hor, x + 22.5 * dx) + ESC_i_nrs(list21silver, magenta, size) + \
+            ESC_dollar(hor, x + 23 * dx) + ESC_i_nrs(list22a, r, size) + \
+            ESC_dollar(hor, x + 23 * dx) + ESC_i_nrs(list22silver, magenta, size) + \
+            ESC_dollar(hor, x + 23.5 * dx) + ESC_i_nrs(list22a, r, size) + \
+            ESC_dollar(hor, x + 23.5 * dx) + ESC_i_nrs(list22silver, magenta, size) + \
+            ESC_dollar(hor, x + 24 * dx) + ESC_i_nrs(list23a, r, size) + \
+            ESC_dollar(hor, x + 24 * dx) + ESC_i_nrs(list23silver, magenta, size) + \
+            ESC_dollar(hor, x + 24.5 * dx) + ESC_i_nrs(list23a, r, size) + \
+            ESC_dollar(hor, x + 24.5 * dx) + ESC_i_nrs(list23silver, magenta, size) + \
+            ESC_dollar(hor, x + 25 * dx) + ESC_i_nrs(list24a, r, size) + \
+            ESC_dollar(hor, x + 25 * dx) + ESC_i_nrs(list24silver, magenta, size) + \
+            ESC_dollar(hor, x + 25.5 * dx) + ESC_i_nrs(list24a, r, size) + \
+            ESC_dollar(hor, x + 25.5 * dx) + ESC_i_nrs(list24silver, magenta, size) + \
+            ESC_dollar(hor, x + 26 * dx) + ESC_i_nrs(list25a, r, size) + \
+            ESC_dollar(hor, x + 26 * dx) + ESC_i_nrs(list25silver, magenta, size) + \
+            ESC_dollar(hor, x + 26.5 * dx) + ESC_i_nrs(list25a, r, size) + \
+            ESC_dollar(hor, x + 26.5 * dx) + ESC_i_nrs(list25silver, magenta, size) + \
+            ESC_dollar(hor, x + 27 * dx) + ESC_i_nrs(list26a, r, size) +\
+            ESC_dollar(hor, x + 27 * dx) + ESC_i_nrs(list26silver, magenta, size)
+
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+    
+def createElectrodeTiny(x, size=1, r=b'\x00', **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1/240)
+    hor= 5760
+    
+    list1 = createnozzlelistsp(43, [1,2,3,4,5,6])
+    list2 = createnozzlelistsp(43, [0,1,6,7,8,9,10,11,12,13])
+    list3 = createnozzlelistsp(43, [0,3,4])
+    list4 = createnozzlelistsp(43, [0,2,3,4,5,6,7,8,9,10,11,12,13])
+    list5 = createnozzlelistsp(43, [0,3,4])
+    list6 = list2
+    list7 = createnozzlelistsp(43, [1,2,5,6])
+   
+ 
+    
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + 2 * dx) + ESC_i_nrs(list1,r,size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list2,r,size) + \
+            ESC_dollar(hor, x + 4 * dx) + ESC_i_nrs(list2,r,size) + \
+            ESC_dollar(hor, x + 5 * dx) + ESC_i_nrs(list3,r,size) + \
+            ESC_dollar(hor, x + 6 * dx) + ESC_i_nrs(list3,r,size) + \
+            ESC_dollar(hor, x + 7 * dx) + ESC_i_nrs(list4,r,size) + \
+            ESC_dollar(hor, x + 8 * dx) + ESC_i_nrs(list4,r,size) + \
+            ESC_dollar(hor, x + 9 * dx) + ESC_i_nrs(list5,r,size) + \
+            ESC_dollar(hor, x + 10 * dx) + ESC_i_nrs(list5,r,size) + \
+            ESC_dollar(hor, x + 11 * dx) + ESC_i_nrs(list6,r,size) + \
+            ESC_dollar(hor, x + 12 * dx) + ESC_i_nrs(list6,r,size) + \
+            ESC_dollar(hor, x + 13 * dx) + ESC_i_nrs(list7,r,size) + \
+            ESC_dollar(hor, x + 14 * dx) + ESC_i_nrs(list7,r,size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createEs(x, r=b'\x00', size=1, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1, 2, 3, 4, 5])
+    list2 = createnozzlelistsp(29, [1, 3, 5])
+    list3 = createnozzlelistsp(29, [1, 5])
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createP(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [6, 7,8,9,10,11,12], fn)
+    list2 = createnozzlelistsp(29, [6, 9], fn)
+    list3 = list2
+    list4 = list2
+    list5 = createnozzlelistsp(29, [7, 8], fn)
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createE(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [6, 7,8,9,10,11,12], fn)
+    list2 = createnozzlelistsp(29, [6, 9, 12], fn)
+    list3 = list2
+    list4 = list2
+    list5 = createnozzlelistsp(29, [6, 12], fn)
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createM(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [6, 7,8,9,10,11,12], fn)
+    list2 = createnozzlelistsp(29, [7], fn)
+    list3 = createnozzlelistsp(29, [8, 9], fn)
+    list4 = list2
+    list5 = list1
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createN(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [6, 7,8,9,10,11,12], fn)
+    list2 = createnozzlelistsp(29, [8], fn)
+    list3 = createnozzlelistsp(29, [9], fn)
+    list4 = createnozzlelistsp(29, [10], fn)
+    list5 = list1
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createD(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1, 2, 3, 4, 5, 6, 7], fn)
+    list2 = createnozzlelistsp(29, [1, 7], fn)
+    list3 = list2
+    list4 = list2
+    list5 = createnozzlelistsp(29, [2, 3, 4, 5, 6], fn)
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createL(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1, 2, 3, 4, 5, 6, 7], fn)
+    list2 = createnozzlelistsp(29, [7], fn)
+    list3 = list2
+    list4 = list2
+    list5 = list2
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createF(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1, 2, 3, 4, 5, 6, 7], fn)
+    list2 = createnozzlelistsp(29, [1, 4], fn)
+    list3 = list2
+    list4 = list2
+    list5 = createnozzlelistsp(29, [1], fn)
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createT(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1], fn)
+    list2 = list1
+    list3 = createnozzlelistsp(29, [1, 2, 3, 4, 5, 6, 7], fn)
+    list4 = list1
+    list5 = list1
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def createU(x, r=b'\x00', size=1, fn=0, **kwargs):
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    hor = 5760
+
+    list1 = createnozzlelistsp(29, [1, 2, 3, 4, 5, 6], fn)
+    list2 = createnozzlelistsp(29, [7], fn)
+    list3 = list2
+    list4 = list2
+    list5 = list1
+    m = len(list1)
+    prefix = b'\x1b' + str_hex('i')  # ESC i
+    c = b'\x01'  # COMPRESSED
+    b = b'\x02'
+    n = 1
+    nL = dec_hex(n % 256)
+    nH = dec_hex(n / 256)
+    mL = dec_hex(m % 256)
+    mH = dec_hex(m / 256)
+
+    image = ESC_dollar(hor, x) + ESC_i_nrs(list1, r, size) + \
+            ESC_dollar(hor, x + dx) + ESC_i_nrs(list2, r,size) + \
+            ESC_dollar(hor,x + 2 * dx) + ESC_i_nrs(list3, r, size) + \
+            ESC_dollar(hor, x + 3 * dx) + ESC_i_nrs(list4, r, size) + \
+            ESC_dollar(hor,x + 4 * dx) + ESC_i_nrs(list5, r, size)
+
+    # suffix1 = b'\x0d' #b'\x0d\x0c'
+    total = image
+
+    return total
+
+
+def printTUDELFT(x=5, y=3, size=3, **kwargs):
+    pmgmt = 720
+    hor = 5760
+    vert = 720
+    black = b'\x00'
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    size1 = size
+    size2 = size
+
+    rasterdata = ESC_v(pmgmt, y) + \
+                 createT(x, black, size1) + \
+                 createU(x + 6 * dx, black, size1) + \
+                 createD(x + 18 * dx,black,size1) + \
+                 createE(x + dx * 24, black, size2) + \
+                 createL(x + 30 * dx, black, size2) + \
+                 createF(x + 36 * dx, black, size2) + \
+                 createT(x + 42 * dx, black, size2) + b'\x0c'
+    return rasterdata
+
+
+def printTUPME(x=5, y=3, size=3, color=b'\x00', rep=1, **kwargs):
+    pmgmt = 720
+    hor = 5760
+    vert = 720
+    black = color
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    size1 = size
+    size2 = size
+
+    rasterdata1 = createT(x, black, size1) + \
+                  createU(x + 6 * dx, black, size1) + \
+                  createD(x + 18 * dx, black, size1) + \
+                  createE(x + dx * 24, black, size1) + \
+                  createL(x + 30 * dx, black, size1) + \
+                  createF(x + 36 * dx, black, size1) + \
+                  createT(x + 42 * dx, black, size1)
+    rasterdata2 = createP(x, black, size1, 10) + \
+                  createM(x + 6 * dx, black, size1, 10) + \
+                  createE(x + 12 * dx, black, size1, 10) + \
+                  createM(x + dx * 20, black, size2, 10) + \
+                  createN(x + 26 * dx, black, size2, 10) + \
+                  createE(x + 32 * dx, black, size2, 10)
+
+    rasterdata = ESC_v(pmgmt, y) + (rasterdata1 + rasterdata2)*rep + b'\x0c'
+    return rasterdata
+
+
+def printLOGO(matrix, x=5.5, y=3, size=3, r=b'\x00', **kwargs):
+    pmgmt = 720
+    hor = 5760
+    vert = 720
+    color = r
+    dy = 0
+    dx = (dy + 1) * (1 / 120)
+    rasterdata = b''
+    for k in range(len(matrix)):
+        rasterdata += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k], color, size))
+    image = rasterdata
+    return image
+
+
+
+
+
+
+
+
+
+
+
+## LOAD BITMAP FUNCTIONS
+
+# def load_bitmap1(**kwargs):
+#     def open_image(event=None):
+#     #     global img_dir
+#         img_dir_tot = filedialog.askopenfile()
+#         img_dir = img_dir_tot.name
+#         IMG = Image.open(img_dir)
+#         loadbtmp.lift()
+#         Canvas1.image = ImageTk.PhotoImage(IMG)
+#         Canvas1.create_image(0, 0, image=Canvas1.image, anchor='nw')
+#
+#     loadbtmp = tk.Toplevel()
+#     tk.Tk.wm_title(loadbtmp, "Load bitmap")
+#
+#     frame_bitmap = ttk.Frame(loadbtmp)
+#     frame_bitmap.pack()
+#
+#     # img_dir = filedialog.askopenfile()
+#     # img_dir = "C:\\Users\\rickw\\Desktop\\test.jpg"
+#     # IMG = Image.open(img_dir)
+#
+#
+#     LoadImgBtn = ttk.Button(frame_bitmap, text="Open Image", command=open_image)
+#     LoadImgBtn.pack()
+#
+#     Canvas1 = tk.Canvas(loadbtmp, width=200, height=200)
+#     Canvas1.pack()
+#     # photo = ImageTk.PhotoImage(IMG)
+#     # w = tk.Label(loadbtmp, image=photo)
+#     # w.photo = photo
+#     # w.pack()
+#     # Canvas1.image = ImageTk.PhotoImage(IMG)
+#     # Canvas1.create_image(0, 0, image=Canvas1.image, anchor='nw')
+#
+#
+#
+#
+#     loadbtmp.resizable(0, 0)
+#     loadbtmp.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # ==============================================
@@ -399,31 +1336,40 @@ def p_logo_TU_fast(**kwargs):
 def nothing(event=None):
     pass
 
+
+
 # ---- Initialisation of Contstants
 patterns={}
-"""
-New patterns can be added in the patterns_gui.py file
-Next they can be added in the patters dictionary below,
-    specifying the relevant parameters, and their default setting
-"""
-
 def load_patterns(event=None):
     global patterns
     patterns = {
-        'nxm raster' : {'posx':     [True, 14],
+        # 'Load Bitmap':{'posx':      [True, 14],
+        #             'posy':         [True, 5],
+        #             'dx':           [False, 250],
+        #             'dy':           [False, 0],
+        #             'rdx':          [False, 0],
+        #             'widthn':       [False, 6],
+        #             'heightm':      [False, 10],
+        #             'dropsize':     [False, 1],
+        #             'fan':          [False, 0],
+        #             'rep':          [True, 1],
+        #             'stretch':      [True, 3],
+        #             'color':        [True, 'black'],
+        #             'command':      [nothing, 0]},
+        'nxm raster' : {'posx':     [True, 166000],
                     'posy':         [True,5],
                     'dx':           [True, 250],
                     'dy':           [True, 0],
                     'rdx':          [False, 0],
-                    'widthn':       [True, 6],
-                    'heightm':      [True, 10],
+                    'widthn':       [True, 1],
+                    'heightm':      [True, 1],
                     'dropsize':     [True, 1],
                     'fan':          [True,0],
                     'rep':          [True,1],
                     'stretch':      [False,0],
-                    'color' :       [False,'black'],
+                    'color' :       [False,'magenta'],
                     'command' :     [p_raster_nxm,0]},
-        '90x90 raster' : {'posx':   [True, 14],
+        '90x90 raster' : {'posx':   [True, 166000],
                     'posy':         [True,5],
                     'dx':           [True, 211.6666666666667],
                     'dy':           [False, 0],
@@ -434,9 +1380,9 @@ def load_patterns(event=None):
                     'fan':          [False,0],
                     'rep':          [True,1],
                     'stretch':      [False,0],
-                    'color' :       [False,'black'],
+                    'color' :       [False,'magenta'],
                     'command' :     [p_raster_90x90,0]},
-        'all nozzles' : {'posx':     [True, 14],
+        'all nozzles' : {'posx':     [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [True, 250],
                     'dy':           [True, 1],
@@ -447,9 +1393,9 @@ def load_patterns(event=None):
                     'fan':          [False, 0],
                     'rep':          [True, 1],
                     'stretch':      [False, 0],
-                    'color' :       [False, 'black'],
+                    'color' :       [False, 'magenta'],
                     'command' :     [p_all_nozzles, 0]},
-        '1-10 drops stacked' : {'posx': [True, 14],
+        '1-10 drops stacked' : {'posx': [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [True, 500],
                     'dy':           [True, 2],
@@ -460,10 +1406,10 @@ def load_patterns(event=None):
                     'fan':          [True, 1],
                     'rep':          [False, 1],
                     'stretch':      [False, 0],
-                    'color' :       [False, 'black'],
+                    'color' :       [False, 'magenta'],
                     'command' :     [p1_10_drops, 0]},
 
-        'raster nxm all dropsizes': {'posx': [True, 14],
+        'raster nxm all dropsizes': {'posx': [True, 166000],
                      'posy':        [True, 5],
                      'dx':          [True, 250],
                      'dy':          [True, 0],
@@ -474,10 +1420,10 @@ def load_patterns(event=None):
                      'fan':         [True, 0],
                      'rep':         [True, 1],
                      'stretch':     [False, 0],
-                     'color':       [True, 'black'],
+                     'color':       [True, 'magenta'],
                      'command':     [p_nxm_sml, 0]},
 
-        'logo PME small' : {'posx': [True, 14],
+        'logo PME small' : {'posx': [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
@@ -488,9 +1434,9 @@ def load_patterns(event=None):
                     'fan':          [False, 0],
                     'rep':          [False, 1],
                     'stretch':      [False, 0],
-                    'color' :       [True, 'black'],
+                    'color' :       [True, 'magenta'],
                     'command' :     [p_logo_pme_small, 0]},
-        'logo PME' : {'posx':       [True, 14],
+        'logo PME' : {'posx':       [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
@@ -501,9 +1447,9 @@ def load_patterns(event=None):
                     'fan':          [True, 0],
                     'rep':          [True, 1],
                     'stretch':      [False, 0],
-                    'color' :       [True, 'black'],
+                    'color' :       [True, 'magenta'],
                     'command' :     [p_logo_pme, 0]},
-        'logo PME-MNE' : {'posx':   [True, 14],
+        'logo PME-MNE' : {'posx':   [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
@@ -514,9 +1460,9 @@ def load_patterns(event=None):
                     'fan':          [True, 1],
                     'rep':          [True, 1],
                     'stretch':      [False, 0],
-                    'color' :       [True, 'black'],
+                    'color' :       [True, 'magenta'],
                     'command' :     [p_logo_pme_mne, 0]},
-        'logo TU-PME' : {'posx':    [True, 14],
+        'logo TU-PME' : {'posx':    [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
@@ -527,9 +1473,9 @@ def load_patterns(event=None):
                     'fan':          [False, 0],
                     'rep':          [True, 1],
                     'stretch':      [False, 0],
-                    'color' :       [True, 'black'],
+                    'color' :       [True, 'magenta'],
                     'command' :     [p_logo_TUPME, 0]},
-        'logo TUDELFT' : {'posx':   [True, 14],
+        'logo TUDELFT' : {'posx':   [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
@@ -540,22 +1486,35 @@ def load_patterns(event=None):
                     'fan':          [False, 0],
                     'rep':          [True, 1],
                     'stretch':      [False, 0],
-                    'color' :       [True, 'black'],
+                    'color' :       [True, 'magenta'],
                     'command' :     [p_logo_TUDelft, 0]},
-        '1-100 drops stacked' : {'posx': [True, 14],
+        'logo P' : {'posx':   [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
-                    'dy':           [True, 3],
-                    'rdx':          [True, 2500],
+                    'dy':           [False, 0],
+                    'rdx':          [False, 0],
                     'widthn':       [False, 6],
-                    'heightm':      [True, 5],
+                    'heightm':      [False, 10],
                     'dropsize':     [True, 1],
-                    'fan':          [True, 0],
-                    'rep':          [False, 1],
+                    'fan':          [False, 0],
+                    'rep':          [True, 1],
                     'stretch':      [False, 0],
-                    'color' :       [True, 'black'],
-                    'command' :     [p_1_100_drops, 0]},
-        'logo TU-FAST' : {'posx':   [True, 14],
+                    'color' :       [True, 'magenta'],
+                    'command' :     [p_logo_P, 0]},
+        'logo electrode tiny' : {'posx':   [True, 150000],
+                    'posy':         [True, 5],
+                    'dx':           [False, 250],
+                    'dy':           [False, 0],
+                    'rdx':          [False, 5000],
+                    'widthn':       [False, 6],
+                    'heightm':      [False, 10],
+                    'dropsize':     [True, 2],
+                    'fan':          [True, 0],
+                    'rep':          [True, 1],
+                    'stretch':      [True, 0],
+                    'color' :       [True, 'black2'],
+                    'command' :     [p_electrode_tiny, 0]},
+        'logo TU-FAST' : {'posx':   [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
@@ -566,8 +1525,47 @@ def load_patterns(event=None):
                     'fan':          [True, 0],
                     'rep':          [True, 1],
                     'stretch':      [True, 3],
-                    'color' :       [True, 'black'],
+                    'color' :       [True, 'magenta'],
                     'command' :     [p_logo_TU_fast, 0]},
+                          'logo electrode silver' : {'posx':   [True, 150000],
+                    'posy':         [True, 5],
+                    'dx':           [False, 250],
+                    'dy':           [False, 0],
+                    'rdx':          [False, 0],
+                    'widthn':       [False, 6],
+                    'heightm':      [False, 10],
+                    'dropsize':     [True, 2],
+                    'fan':          [True, 0],
+                    'rep':          [True, 1],
+                    'stretch':      [True, 0],
+                    'color' :       [True, 'magenta'],
+                    'command' :     [p_electrode, 0]},
+                                               'logo electrode small' : {'posx':   [True, 150000],
+                    'posy':         [True, 5],
+                    'dx':           [False, 250],
+                    'dy':           [False, 0],
+                    'rdx':          [False, 5000],
+                    'widthn':       [False, 6],
+                    'heightm':      [False, 10],
+                    'dropsize':     [True, 2],
+                    'fan':          [True, 0],
+                    'rep':          [True, 1],
+                    'stretch':      [True, 0],
+                    'color' :       [True, 'black2'],
+                    'command' :     [p_electrode_small, 0]},
+                                                                    'logo Alok2' : {'posx':       [True, 140000],
+                    'posy':         [True, 5],
+                    'dx':           [False, 250],
+                    'dy':           [False, 0],
+                    'rdx':          [False, 0],
+                    'widthn':       [False, 6],
+                    'heightm':      [False, 10],
+                    'dropsize':     [True, 1],
+                    'fan':          [True, 0],
+                    'rep':          [True, 1],
+                    'stretch':      [False, 0],
+                    'color' :       [True, 'magenta'],
+                    'command' :     [p_alok_grid, 0]},
         # 'znew3' : {'posx':            [False, 14],
         #             'posy':         [False, 5],
         #             'dx':           [False, 250],
@@ -600,6 +1598,9 @@ for x in dotOpt:
 dotNames = tuple(sorted(dotNames))
 
 
+
+
+
 def nR():
     global curRow
     curRow += 1
@@ -612,29 +1613,31 @@ def sR():
 def nsy(event=None):
     print('not supported yet')
 
+
 def addEntry(destframe, desc, unit, value, rown, coln=0, valcmd=None):
 
     label_new = ttk.Label(destframe, text=(desc+": "))
-    entry_new = ttk.Entry(destframe, textvariable=value, validate='key',
-                          validatecommand=valcmd, justify=tk.LEFT, width=13)
+    entry_new = ttk.Entry(destframe, textvariable=value, validate = 'key', validatecommand = valcmd, justify = tk.LEFT, width=13)
     label_new_unit = ttk.Label(destframe, text=" "+unit)
     label_new.grid(row=rown, column=coln, sticky="e", pady=2)
     entry_new.grid(row=rown, column=coln+1, pady=2, padx=5, sticky="e")
     label_new_unit.grid(row=rown, column=coln+2, sticky="w", pady=2)
 
+
+
 def addOption(destframe, desc, value, vlist, rown, coln=0, valcmd=None):
 
     label_new = ttk.Label(destframe, text=(desc+": "))
-    combobox_new = ttk.Combobox(destframe, values=vlist, textvariable=value,
-                                width=10, validate='key',
-                                validatecommand=valcmd, justify=tk.LEFT)
+    combobox_new = ttk.Combobox(destframe, values=vlist, textvariable=value, width=10, validate = 'key', validatecommand = valcmd, justify = tk.LEFT)
     # label_new_unit = ttk.Label(destframe, text=" "+unit)
     label_new.grid(row=rown, column=coln, sticky="e", pady=2)
     combobox_new.grid(row=rown, column=coln+1, pady=2, padx=5)
     # label_new_unit.grid(row=rown, column=coln2, sticky="w", pady=2)
 
-def validate_int(action, index, value_if_allowed, prior_value, text,
-                 validation_type, trigger_type, widget_name):
+
+
+def validate_int(action, index, value_if_allowed,
+                   prior_value, text, validation_type, trigger_type, widget_name):
     # action=1 -> insert
     if (action == '1'):
         if text in '0123456789.':
@@ -648,8 +1651,10 @@ def validate_int(action, index, value_if_allowed, prior_value, text,
     else:
         return True
 
-def validate_float(action, index, value_if_allowed, prior_value, text,
-                   validation_type, trigger_type, widget_name):
+
+
+def validate_float(action, index, value_if_allowed,
+                   prior_value, text, validation_type, trigger_type, widget_name):
     # action=1 -> insert
     if (action == '1'):
         if text in '0123456789.':
@@ -663,28 +1668,35 @@ def validate_float(action, index, value_if_allowed, prior_value, text,
     else:
         return True
 
+
+
+# dout = dict((k,v) for k,v in mydict.items())
 def setvar_dict(originaldict):
+    # dict1 = copy.deepcopy(originaldict)
     dict1 = originaldict.copy()
     for x in dict1:
         if dict1[x][0] == True:
             value = dict1[x][1]
-            if isinstance(value, tk.IntVar) or \
-                    isinstance(value, tk.StringVar) or \
-                    isinstance(value, tk.DoubleVar) or \
-                    isinstance(value, tk.BooleanVar):
+            if isinstance(value, tk.IntVar) or isinstance(value, tk.StringVar) or \
+                    isinstance(value, tk.DoubleVar) or isinstance(value, tk.BooleanVar):
                 pass
+                # print('  Already Correct Var!')
             elif isinstance(value, int):
                 dict1[x][1] = tk.IntVar()
                 dict1[x][1].set(value)
+                # print('  Done!')
             elif isinstance(value, float):
                 dict1[x][1] = tk.DoubleVar()
                 dict1[x][1].set(value)
+                # print('  Done!')
             elif isinstance(value, bool):
                 dict1[x][1] = tk.BooleanVar()
                 dict1[x][1].set(value)
+                # print('  Done!')
             elif isinstance(value, str):
                 dict1[x][1] = tk.StringVar()
                 dict1[x][1].set(value)
+                # print('  Done!')
             elif isinstance(value, bytes):
                 print('  NOT SUPPORTED YET ;(')
             else:
@@ -697,23 +1709,26 @@ def setvar_printer_dict(originaldict):
     dict1 = originaldict.copy()
     for x in dict1:
         value = dict1[x]
-        if isinstance(value, tk.IntVar) or \
-                isinstance(value, tk.StringVar) or \
-                isinstance(value, tk.DoubleVar) or \
-                isinstance(value, tk.BooleanVar):
+        if isinstance(value, tk.IntVar) or isinstance(value, tk.StringVar) or \
+                isinstance(value, tk.DoubleVar) or isinstance(value, tk.BooleanVar):
             pass
+            # print('  Already Correct Var!')
         elif isinstance(value, int):
             dict1[x] = tk.IntVar()
             dict1[x].set(value)
+            # print('  Done!')
         elif isinstance(value, float):
             dict1[x] = tk.DoubleVar()
             dict1[x].set(value)
+            # print('  Done!')
         elif isinstance(value, bool):
             dict1[x] = tk.BooleanVar()
             dict1[x].set(value)
+            # print('  Done!')
         elif isinstance(value, str):
             dict1[x] = tk.StringVar()
             dict1[x].set(value)
+            # print('  Done!')
         elif isinstance(value, bytes):
             print('  NOT SUPPORTED YET ;(')
         else:
@@ -728,12 +1743,14 @@ def slugify(file_name):
     return ''.join(c for c in file_name if c in valid_chars)
 
 
+
 # =============================
 # ---- Main GUI Class ----
 # =============================
 root = tk.Tk()
 # ICON AND TITLE
-tk.Tk.wm_title(root, "ESC/P2 Control Client")
+# tk.Tk.iconbitmap(root, default="icons\clienticon.ico")
+tk.Tk.wm_title(root, "ESC/P2 Control Client (for Drop-on-demand)")
 
 
 
@@ -744,6 +1761,7 @@ s = ttk.Style()
 s.configure('Blue.TLabelframe.Label', font=('Verdana', 14))
 s.configure('Blue.TLabelframe.Label', foreground='royal blue')
 s.theme_use('clam')
+# ('winnative', 'clam', 'alt', 'default', 'classic', 'vista', 'xpnative')
 
 
 # =============================
@@ -751,9 +1769,11 @@ s.theme_use('clam')
 # =============================
 main_frame = ttk.Notebook(root)
 print_frame = ttk.Frame(main_frame)
+calibrate_frame = ttk.Frame(main_frame)
 setup_frame = ttk.Frame(main_frame)
 
 main_frame.add(print_frame, text='  Print  ')
+main_frame.add(calibrate_frame, text='  Calibrate  ')
 main_frame.add(setup_frame, text='  Settings  ')
 
 main_frame.pack(side="top", fill="both", expand=True)
@@ -761,31 +1781,34 @@ main_frame.grid_rowconfigure(0, weight=1)
 main_frame.grid_columnconfigure(0, weight=1)
 
 
+
 # =============================
 # FRAMES IN PRINT MENU
 # =============================
-frame_patterns = ttk.Labelframe(print_frame, padding=6, text="Patterns",
-                                style="Blue.TLabelframe")
-frame_printers = ttk.Labelframe(print_frame, padding=6, text="Printers",
-                                style="Blue.TLabelframe")
-frame_patterns_par = ttk.Labelframe(print_frame, padding=6,
-                                    text="Set Pattern Parameters",
-                                    style="Blue.TLabelframe")
-frame_printers_par = ttk.Labelframe(print_frame, padding=6,
-                                    text="Set Printer Parameters",
-                                    style="Blue.TLabelframe")
-frame_controls = ttk.Labelframe(print_frame, padding=6, text="Control",
-                                style="Blue.TLabelframe")
+frame_patterns = ttk.Labelframe(print_frame, padding=6, text="Patterns", style="Blue.TLabelframe")
+frame_printers = ttk.Labelframe(print_frame, padding=6, text="Printers", style="Blue.TLabelframe")
+frame_patterns_par = ttk.Labelframe(print_frame, padding=6, text="Set Pattern Parameters", style="Blue.TLabelframe")
+frame_printers_par = ttk.Labelframe(print_frame, padding=6, text="Set Printer Parameters", style="Blue.TLabelframe")
+frame_controls = ttk.Labelframe(print_frame, padding=6, text="Control", style="Blue.TLabelframe")
 
 frame_patterns.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
 frame_printers.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
 frame_patterns_par.grid(row=0, column=1, sticky="nsew", padx=10, pady=5)
 frame_printers_par.grid(row=1, column=1, sticky="nsew", padx=10, pady=5)
-frame_controls.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10,
-                    pady=5)
+frame_controls.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
 
 # size frames
 print_frame.grid_columnconfigure(1, minsize=1000)
+# print_frame.grid_columnconfigure(2, minsize=300)
+
+
+# print_toolbar = ttk.Frame(print_frame, width=300, padding=5)
+# print_varsetup = ttk.Frame(print_frame, width=800)
+# print_toolbar.grid(row=0, column=0, sticky="nsew")
+# ttk.Separator(print_frame, orient="vertical").grid(row=0,column=1, sticky="ns")
+# print_varsetup.grid(row=0, column=2, sticky="nsew")
+
+
 
 
 # =============================
@@ -797,10 +1820,27 @@ ttk.Label(setup_main, text="EMPTY", font=LARGE_FONT).pack()
 
 
 # =============================
+# FRAME IN Calibrate
+# =============================
+calibrate_main = ttk.Frame(calibrate_frame)
+calibrate_main.pack()
+ttk.Label(calibrate_main, text="Place GUI over here", font=LARGE_FONT).pack()
+
+
+
+
+
+
+
+
+
+# =============================
 # MENUBAR
 # =============================
 menubar = tk.Menu(main_frame)
 tk.Tk.config(root, menu=menubar)
+def quit():
+    sys.exit()
 
 filemenu = tk.Menu(menubar, tearoff=0)
 filemenu.add_command(label="Save current as preset", command=lambda: nsy())
@@ -811,13 +1851,10 @@ filemenu.add_command(label="Exit", command=quit)
 menubar.add_cascade(label="File", menu=filemenu)
 
 linuxmenu = tk.Menu(menubar, tearoff=0)
-linuxmenu.add_command(label="Print to default printer",
-                      command=lambda: print_esc_commands())
-linuxmenu.add_command(label="Print to printer...",
-                      command=lambda: print_esc_commands(PLNAME='other'))
+linuxmenu.add_command(label="Print to default printer", command=lambda: print_esc_commands())
+linuxmenu.add_command(label="Print to printer...", command=lambda: print_esc_commands(PLNAME='other'))
 linuxmenu.add_separator()
-linuxmenu.add_command(label="Cancel All printjobs",
-                      command=lambda: cancel_print_jobs())
+linuxmenu.add_command(label="Cancel All printjobs", command=lambda: cancel_print_jobs())
 # linuxmenu.add_command(label="Restart Cups", command=lambda: restart_cups())
 linuxmenu.add_separator()
 linuxmenu.add_command(label="Parse ESC/P2", command=lambda: parse_escp2())
@@ -829,9 +1866,9 @@ menubar.add_cascade(label="Linux Tools", menu=linuxmenu)
 # menubar.add_cascade(label="new menu", menu=newmenu)
 
 helpMenu = tk.Menu(menubar, tearoff=0)
-helpMenu.add_command(label="Open manual (pdf)",
-                     command=lambda: open_help_pdf())
+helpMenu.add_command(label="Open manual (pdf)", command=lambda: open_help_pdf())
 menubar.add_cascade(label="Help", menu=helpMenu)
+
 
 
 # =============================
@@ -844,6 +1881,8 @@ def updateDyVar(event=None):
     dy_var.set('= '+str("%.2f" % round(dy_num,2))+u' \u03bcm')
 
 
+
+
 # =============================
 # PATTERN SELECT LISTBOX
 # =============================
@@ -852,8 +1891,7 @@ for x in patterns:
     patternList += (x,)
 
 patNames = tk.StringVar(value=tuple(patternList))
-patList = tk.Listbox(frame_patterns, listvariable=patNames, height=16,
-                     width=30, selectmode='single', exportselection=False)
+patList = tk.Listbox(frame_patterns, listvariable=patNames, height=16, width = 30, selectmode='single', exportselection=False)
 patList.grid()
 
 def get_pattern_name(event):
@@ -881,8 +1919,7 @@ printerNames = tuple(sorted(printerNames))
 print(printerNames)
 prinNames = tk.StringVar(value=printerNames)
 
-prinList = tk.Listbox(frame_printers, listvariable=prinNames, height=12,
-                      width=30, selectmode='single', exportselection=False)
+prinList = tk.Listbox(frame_printers, listvariable=prinNames, height=12, width = 30, selectmode='single', exportselection=False)
 prinList.grid()
 
 # select_printer(printerSelected)
@@ -900,11 +1937,15 @@ def get_printer_name(event):
 prinList.bind("<ButtonRelease-1>", get_printer_name)
 
 
+
+
+
 # BOUND ENTRY BOX TO INTEGERS
-valint = (tk.Tk.register(root, validate_int), '%d', '%i', '%P', '%s', '%S',
-                                              '%v', '%V', '%W')
-valflt = (tk.Tk.register(root, validate_float), '%d', '%i', '%P', '%s', '%S',
-                                                '%v', '%V', '%W')
+valint = (tk.Tk.register(root, validate_int), '%d', '%i', '%P', '%s', '%S', '%v', '%V', '%W')
+valflt = (tk.Tk.register(root, validate_float), '%d', '%i', '%P', '%s', '%S', '%v', '%V', '%W')
+
+
+
 
 
 # =============================
@@ -930,88 +1971,42 @@ def updatePatternParameters():
     frame_patterns_par.grid_columnconfigure(2, minsize=200)
     frame_patterns_par.grid_columnconfigure(3, minsize=120)
 
-    ttk.Label(frame_patterns_par, text='Basic Options',
-              font=('sansseriv', 12)).grid(row=nR(), column=0)
-    addEntry(frame_patterns_par, 'X position', 'cm', patternDict['posx'][1],
-             nR(), valcmd=valflt) if patterns[patternSelected]['posx'][0] \
-                                  else None
-    addEntry(frame_patterns_par, 'Y position', 'cm', patternDict['posy'][1],
-             nR(), valcmd=valflt) if patterns[patternSelected]['posy'][0] \
-                                  else None
-    addEntry(frame_patterns_par, 'Distance dx', u'\u03bcm',
-             patternDict['dx'][1], nR(), valcmd=valflt) \
-                if patterns[patternSelected]['dx'][0] else None
+    ttk.Label(frame_patterns_par, text='Basic Options', font=('sansseriv', 12)).grid(row=nR(), column=0)
+    addEntry(frame_patterns_par, 'X position', 'microns', patternDict['posx'][1], nR(), valcmd=valflt) if patterns[patternSelected]['posx'][0] else None
+    addEntry(frame_patterns_par, 'Y position', 'cm', patternDict['posy'][1], nR(), valcmd=valflt) if patterns[patternSelected]['posy'][0] else None
+    addEntry(frame_patterns_par, 'Distance dx', u'\u03bcm', patternDict['dx'][1], nR(), valcmd=valflt) if patterns[patternSelected]['dx'][0] else None
 
-    # addEntry(frame_patterns_par, 'Distance dy',
-    #          u'nozzle stretch (0 = 211.67 \u03bcm)', patternDict['dy'][1],
-    #          nR(), valcmd=valint) if patterns[patternSelected]['dy'][0] \
-    #                               else None
+    # addEntry(frame_patterns_par, 'Distance dy', u'nozzle stretch (0 = 211.67 \u03bcm)', patternDict['dy'][1], nR(), valcmd=valint) if patterns[patternSelected]['dy'][0] else None
     if patterns[patternSelected]['dy'][0]:
         updateDyVar()
-        ttk.Label(frame_patterns_par, text='Distance dy: ').grid(row=nR(),
-                                                                 column=0,
-                                                                 sticky="e",
-                                                                 pady=2)
-        tk.Spinbox(frame_patterns_par, from_=0, to=29,
-                   textvariable=patternDict['dy'][1], width=11,
-                   command=updateDyVar, validate='key',
-                   validatecommand=valint).grid(row=sR(),column=1, pady=2,
-                                                padx=5, sticky="e")
-        ttk.Label(frame_patterns_par, textvariable=dy_var).grid(row=sR(),
-                                                                column=2,
-                                                                sticky="w",
-                                                                pady=2)
+        ttk.Label(frame_patterns_par, text='Distance dy: ').grid(row=nR(), column=0, sticky="e", pady=2)
+        tk.Spinbox(frame_patterns_par, from_=0, to=29, textvariable=patternDict['dy'][1], width=11, command=updateDyVar, validate='key', validatecommand=valint).grid(row=sR(),column=1, pady=2, padx=5, sticky="e")
+        ttk.Label(frame_patterns_par, textvariable=dy_var).grid(row=sR(), column=2, sticky="w", pady=2)
 
-    addEntry(frame_patterns_par, 'Raster width', 'dots',
-             patternDict['widthn'][1], nR(), valcmd=valint) \
-                if patterns[patternSelected]['widthn'][0] else None
-    addEntry(frame_patterns_par, 'Raster height', 'dots',
-             patternDict['heightm'][1], nR(), valcmd=valint) \
-                if patterns[patternSelected]['heightm'][0] else None
-    addEntry(frame_patterns_par, 'Distance between patterns', u'\u03bcm',
-             patternDict['rdx'][1], nR(), valcmd=valflt) \
-                if patterns[patternSelected]['rdx'][0] else None
+    addEntry(frame_patterns_par, 'Raster width', 'dots', patternDict['widthn'][1], nR(), valcmd=valint) if patterns[patternSelected]['widthn'][0] else None
+    addEntry(frame_patterns_par, 'Raster height', 'dots', patternDict['heightm'][1], nR(), valcmd=valint) if patterns[patternSelected]['heightm'][0] else None
+    addEntry(frame_patterns_par, 'Distance between patterns', u'\u03bcm', patternDict['rdx'][1], nR(), valcmd=valflt) if patterns[patternSelected]['rdx'][0] else None
 
-    ttk.Label(frame_patterns_par,
-              text='Droplet size: ').grid(row=nR(), column=0, sticky="se",
-              pady=(20, 2)) if patterns[patternSelected]['dropsize'][0] \
-                            else None
-    ttk.Radiobutton(frame_patterns_par, text='Small', variable=drop_size,
-                    value=1).grid(row=sR(), column=1, columnspan=2,
-                    sticky='sw', padx=3) \
-                        if patterns[patternSelected]['dropsize'][0] else None
-    ttk.Radiobutton(frame_patterns_par, text='Medium', variable=drop_size,
-                    value=2).grid(row=nR(), column=1, columnspan=2, sticky='w',
-                    padx=3) if patterns[patternSelected]['dropsize'][0] \
-                            else None
-    ttk.Radiobutton(frame_patterns_par, text='Large', variable=drop_size,
-                    value=3).grid(row=nR(), column=1, columnspan=2, sticky='w',
-                    padx=3) if patterns[patternSelected]['dropsize'][0] \
-                            else None
+    ttk.Label(frame_patterns_par, text='Droplet size: ').grid(row=nR(), column=0, sticky="se", pady=(20, 2)) if patterns[patternSelected]['dropsize'][0] else None
+    ttk.Radiobutton(frame_patterns_par, text='Small', variable=drop_size, value=1).grid(row=sR(), column=1, columnspan=2, sticky='sw', padx=3) if patterns[patternSelected]['dropsize'][0] else None
+    ttk.Radiobutton(frame_patterns_par, text='Medium', variable=drop_size, value=2).grid(row=nR(), column=1, columnspan=2, sticky='w', padx=3) if patterns[patternSelected]['dropsize'][0] else None
+    ttk.Radiobutton(frame_patterns_par, text='Large', variable=drop_size, value=3).grid(row=nR(), column=1, columnspan=2, sticky='w', padx=3) if patterns[patternSelected]['dropsize'][0] else None
 
     # advanced options....
     curRow=0
     frame_patterns_par.grid_columnconfigure(2, minsize=200)
-    ttk.Label(frame_patterns_par, text='Advanced Options',
-              font=('sansseriv', 12)).grid(row=nR(), column=3, columnspan=2,
-                                           sticky="w")
-    addEntry(frame_patterns_par, 'Repetitions', 'dots over each other',
-             patternDict['rep'][1], nR(), 3, valcmd=valint) \
-        if patterns[patternSelected]['rep'][0] else None
-    addEntry(frame_patterns_par, 'First active nozzle', 'nozzle',
-             patternDict['fan'][1], nR(), 3, valcmd=valint) \
-        if patterns[patternSelected]['fan'][0] else None
-    addEntry(frame_patterns_par, 'Width scaling',
-             '(3 gives equal horizontal and vertical stretch)',
-             patternDict['stretch'][1], nR(), 3, valcmd=valint) \
-        if patterns[patternSelected]['stretch'][0] else None
+    ttk.Label(frame_patterns_par, text='Advanced Options', font=('sansseriv', 12)).grid(row=nR(), column=3, columnspan=2, sticky="w")
+    addEntry(frame_patterns_par, 'Repetitions', 'dots over each other', patternDict['rep'][1], nR(), 3, valcmd=valint) if patterns[patternSelected]['rep'][0] else None
+    addEntry(frame_patterns_par, 'First active nozzle', 'nozzle', patternDict['fan'][1], nR(), 3, valcmd=valint) if patterns[patternSelected]['fan'][0] else None
+    addEntry(frame_patterns_par, 'Width scaling', '(3 gives equal horizontal and vertical stretch)', patternDict['stretch'][1], nR(), 3, valcmd=valint) if patterns[patternSelected]['stretch'][0] else None
 
-    # if patternSelected == 'Load Bitmap':
-    #     ttk.Label(frame_patterns_par, text=' ').grid(row=nR())
-    #     ttk.Button(frame_patterns_par, text='TestButton',
-    #                command=load_bitmap1).grid(row=nR(), column=1)
+    if patternSelected == 'Load Bitmap':
+        ttk.Label(frame_patterns_par, text=' ').grid(row=nR())
+        ttk.Button(frame_patterns_par, text='TestButton', command=load_bitmap1).grid(row=nR(), column=1)
 
 updatePatternParameters()
+
+
 
 
 # =============================
@@ -1021,7 +2016,8 @@ printerDict = setvar_printer_dict(printersParDict[printerSelected])
 unibimode = tk.IntVar()
 unibimode.set(1)
 colorSelection = tk.StringVar()
-colorSelection.set('black')
+colorSelection.set('magenta')
+
 
 
 def updatePrinterParameters():
@@ -1034,48 +2030,35 @@ def updatePrinterParameters():
     frame_printers_par.grid_columnconfigure(2, minsize=200)
     frame_printers_par.grid_columnconfigure(3, minsize=120)
 
-    ttk.Label(frame_printers_par, text='Basic Options',
-              font=('sansseriv', 12)).grid(row=nR(), column=0)
-    addEntry(frame_printers_par, 'Page Management', '', printerDict['pmgmt'],
-             nR(), valcmd=valint)
-    addEntry(frame_printers_par, 'Vertical Unit', '', printerDict['vert'],
-             nR(), valcmd=valint)
-    addEntry(frame_printers_par, 'Horizontal Unit', '', printerDict['hor'],
-             nR(), valcmd=valint)
-    addEntry(frame_printers_par, 'Nozzles', '', printerDict['nozzles'], nR(),
-             valcmd=valint)
-    addOption(frame_printers_par, 'Nozzle Row', colorSelection, colorNames,
-              nR()) if patterns[patternSelected]['color'] else None
+    ttk.Label(frame_printers_par, text='Basic Options', font=('sansseriv', 12)).grid(row=nR(), column=0)
+    addEntry(frame_printers_par, 'Page Management', '', printerDict['pmgmt'], nR(), valcmd=valint)
+    addEntry(frame_printers_par, 'Vertical Unit', '', printerDict['vert'], nR(), valcmd=valint)
+    addEntry(frame_printers_par, 'Horizontal Unit', '', printerDict['hor'], nR(), valcmd=valint)
+    addEntry(frame_printers_par, 'Nozzles', '', printerDict['nozzles'], nR(), valcmd=valint)
+    addOption(frame_printers_par, 'Nozzle Row', colorSelection, colorNames, nR()) if patterns[patternSelected]['color'] else None
 
 
-    ttk.Label(frame_printers_par, text='Print Direction Method ').grid(
-            row=nR(), column=0, sticky="se")
-    ttk.Radiobutton(frame_printers_par, text='Unidirectional',
-                    variable=unibimode, value=1).grid(row=sR(), column=1,
-                                                      columnspan=2,
-                                                      sticky='sw', padx=3)
-    ttk.Radiobutton(frame_printers_par, text='Bidirectional',
-                    variable=unibimode, value=0).grid(row=nR(), column=1,
-                                                      columnspan=2, sticky='w',
-                                                      padx=3)
+    ttk.Label(frame_printers_par, text='Print Direction Method ').grid(row=nR(), column=0, sticky="se")
+    ttk.Radiobutton(frame_printers_par, text='Unidirectional', variable=unibimode, value=1).grid(row=sR(), column=1, columnspan=2, sticky='sw', padx=3)
+    ttk.Radiobutton(frame_printers_par, text='Bidirectional', variable=unibimode, value=0).grid(row=nR(), column=1, columnspan=2, sticky='w', padx=3)
 
     # advanced options....
     curRow=0
     frame_printers_par.grid_columnconfigure(2, minsize=200)
-    ttk.Label(frame_printers_par, text='Advanced Options',
-              font=('sansseriv', 12)).grid(row=nR(), column=3, columnspan=2,
-                                           sticky="w")
-    # addEntry(frame_printers_par, 'First active nozzle', 'nozzle',
-    #          printerDict['pmid'], nR(), 3, valcmd=valint)
-    addOption(frame_printers_par, 'Dot quality', printerDict['d'], dotNames,
-              nR(), 3)
-    addOption(frame_printers_par, 'Mod Unit', printerDict['m'], modUnits, nR(),
-              3, valcmd=valint)
-    addOption(frame_printers_par, 'Print Method ID', printerDict['pmid'],
-              pmidNames, nR(), 3)
+    ttk.Label(frame_printers_par, text='Advanced Options', font=('sansseriv', 12)).grid(row=nR(), column=3, columnspan=2, sticky="w")
+    # addEntry(frame_printers_par, 'First active nozzle', 'nozzle', printerDict['pmid'], nR(), 3, valcmd=valint)
+    addOption(frame_printers_par, 'Dot quality', printerDict['d'], dotNames, nR(), 3)
+    addOption(frame_printers_par, 'Mod Unit', printerDict['m'], modUnits, nR(), 3, valcmd=valint)
+    addOption(frame_printers_par, 'Print Method ID', printerDict['pmid'], pmidNames, nR(), 3)
 
 
 updatePrinterParameters()
+
+
+
+
+
+
 
 
 # =============================
@@ -1085,11 +2068,13 @@ current_dir = os.path.dirname(os.path.realpath(__file__))
 save_dir_var = tk.StringVar()
 save_dir_var.set(current_dir+'/output')
 lpname_var = tk.StringVar()
-lpname_var.set("Epson-Stylus-SX235")
+lpname_var.set(r'\\DESKTOP-FFM3HHR\epsonprinter2')
 
 ParseOpt = [("None", "None"), ("Desc", "v"), ("Decomp", "V"), ("Hex", "ghex")]
 ParseOpt_var = tk.StringVar()
 ParseOpt_var.set("None")
+
+
 
 
 def get_values(event=None):
@@ -1098,20 +2083,18 @@ def get_values(event=None):
     global black, black2, black3, yellow, magenta, cyan, color
     global prnname, linux_name
 
-    x = patternDict['posx'][1].get()/2.54 if patternDict['posx'][0] else 5
+    #x = patternDict['posx'][1].get()/(2.54) if patternDict['posx'][0] else 5
+    x = patternDict['posx'][1].get()/(2.54*10000) if patternDict['posx'][0] else 5
     y = patternDict['posy'][1].get()/2.54 if patternDict['posy'][0] else 3
-    dx = um_in(patternDict['dx'][1].get()) if patternDict['dx'][0] \
-            else um_in(250)
+    dx = um_in(patternDict['dx'][1].get()) if patternDict['dx'][0] else um_in(250)
     dy = patternDict['dy'][1].get() if patternDict['dy'][0] else 0
-    rdx = um_in(patternDict['rdx'][1].get()) if patternDict['rdx'][0] \
-            else um_in(5000)
+    rdx = um_in(patternDict['rdx'][1].get()) if patternDict['rdx'][0] else um_in(5000)
     n = patternDict['widthn'][1].get() if patternDict['widthn'][0] else 1
     m = patternDict['heightm'][1].get() if patternDict['heightm'][0] else 1
     size = drop_size.get() if patternDict['dropsize'][0] else 1
     fan = patternDict['fan'][1].get() if patternDict['fan'][0] else 0
     rep = patternDict['rep'][1].get() if patternDict['rep'][0] else 1
-    stretch = patternDict['stretch'][1].get() if patternDict['stretch'][0] \
-            else 0
+    stretch = patternDict['stretch'][1].get() if patternDict['stretch'][0] else 0
 
     pmgmt = printerDict['pmgmt'].get()
     vert = printerDict['vert'].get()
@@ -1132,32 +2115,21 @@ def get_values(event=None):
     try:
         color = printerDict[colorSelection.get()]
     except:
-        tk.messagebox.showerror('Color Error', "Selected color is not "
-                                "properly setup for this printer, try default "
-                                "color 'black'.")
+        tk.messagebox.showerror('Color Error', "Selected color is not properly setup for this printer, try default color 'black'.")
 
     try:
         black = printerDict['black']
+        black3 = printerDict['black3']
+        black2 = printerDict['black2']
         cyan = printerDict['cyan']
         yellow = printerDict['yellow']
         magenta = printerDict['magenta']
-
-        try:
-            black2 = printerDict['black2']
-            black3 = printerDict['black3']
-        except:
-            if color == 'black2' or color == 'black3':
-                tk.messagebox.showerror("Color Warning", "This printer only "
-                                        "has one black nozzle column, try "
-                                        "default color 'black'. ")
-
-        if not cyan or not yellow or not magenta:
-            tk.messagebox.showerror("Color Warning", "Colors are not "
-                                    "supported for this printer model, try "
-                                    "default color 'black'. ")
     except:
-        tk.messagebox.showerror("Color Error", "Selected color is (maybe) not "
-                                "set up, try default color 'black'. ")
+        tk.messagebox.showerror("Color Error", "Selected color is (maybe) not set up, try default color 'black'. ")
+
+
+
+    print("Values geGet")
 
 
 def run_program(event=None):
@@ -1170,20 +2142,29 @@ def run_program(event=None):
            ESC_imode() + ESC_Umode(umode) + ESC_edot(d) + ESC_Dras() + \
            ESC_C(pmgmt) + ESC_c(pmgmt) + ESC_S(pmgmt) + ESC_m(pmid)
 
+
     try:
         rasterdata = patternDict['command'][0]()#(n=n,m=m,size=size,dx=dx,dy=dy,fan=fan,rep=rep, stretch=stretch, rdx=rdx, x=x, y=y, hor=hor, vert=vert, pmgmt=pmgmt, nozzles=nozzles)
         totaldata = header + body + rasterdata + footer
     except:
-        tk.messagebox.showerror("ESC Command Error", "Command for this "
-                                "pattern could not be generated.\n"
-                                "Selected color probably not properly setup "
-                                "for this printer.")
+        tk.messagebox.showerror("ESC Command Error", "Command for this pattern could not be generated.\nSelected color probably not properly setup for this printer.")
 
-    tk.messagebox.showinfo("Data Generated", "The required ESC Commands are "
-                           "generated!")
+    tk.messagebox.showinfo("Data Generated", "The required ESC Commands are generated!")
+
+
 
 
 get_values()
+
+
+
+
+
+
+
+
+
+
 
 
 def set_save_dir(event=None):
@@ -1191,6 +2172,7 @@ def set_save_dir(event=None):
     save_dir = filedialog.askdirectory()
     save_dir_var.set(save_dir)
     print(save_dir)
+
 
 
 def reset_vars(event=None):
@@ -1205,6 +2187,7 @@ def reset_vars(event=None):
     tk.messagebox.showinfo("Parameters Reset", "All parameters were Reset!")
 
 
+
 def save_temp():
     global path
     run_program()
@@ -1212,35 +2195,92 @@ def save_temp():
     save_prn_file(input=totaldata, filename='temp', folder=save_dir_var.get())
 
 
+
 def save_output_file(event=None):
     run_program()
     filename=filename_var.get()
-    save_prn_file(input=totaldata ,filename=filename,
-                  folder=save_dir_var.get())
+    save_prn_file(input=totaldata ,filename=filename, folder=save_dir_var.get())
     tk.messagebox.showinfo("Output Saved", "Save Successful")
-
-
-def print_esc_commands(event=None, PLNAME='def'):
-    if PLNAME == 'def':
-        plname = lpname_var.get()
-    else:
-        plname = simpledialog.askstring("Set Printer Name",
-                                        "Linux printer name:",
-                                        initialvalue=lpname_var.get())
-        lpname_var.set(plname)
-    # linux_command = "lp -d "+printersParDict[printerSelected]['linux-name']+" -oraw "+path
-    save_temp()
+    
+def serial_connect(event=None):
     try:
-        subprocess.call(["lp", "-d", plname, "-oraw", path])
+        ser = serial.Serial('COM4', 9800, timeout=1)        
     except:
-        tk.messagebox.showerror("Linux Error", "Could not print the data due "
-                                "to a error in Linux, the printername is "
-                                "probably not setup correctly.")
+        tk.messagebox.showerror("Connect Error", "Could not connect to COM3")
+    
+    
+def move_stage_up(event=None):
+    ser.write(b'D')
 
+def move_stage_down(event=None):
+    ser.write(b'U')
+    
+def print_esc_commands(event=None):
+    import shutil
+    filename=filename_var.get()
+    from subprocess import Popen
+    filepath = (save_dir_var.get() + '/' + filename + '.prn')
+    server = (r'\\DESKTOP-FFM3HHR\epsonprinter2')
+  #  try:
+    tk.messagebox.showinfo("File send to printer", "The file is send to the printer!")
+    shutil.copyfile(filepath, server)
+#    except Error:
+ #       tk.messagebox.showerror("error", "Could not send file to print")
 
-def cancel_print_jobs(event=None):
-    subprocess.call(["cancel", "-a"])
-    tk.messagebox.showinfo("Print Jobs Canceled", "Success")
+def save_print_esc_commands(event=None):
+    run_program()
+    filename=filename_var.get()
+    save_prn_file(input=totaldata ,filename=filename, folder=save_dir_var.get()) 
+    filepath = (save_dir_var.get() + '/' + filename + '.prn')
+    server = (r'\\DESKTOP-FFM3HHR\epsonprinter2')
+    try:
+        tk.messagebox.showinfo("File send to printer", "The file is saved and send to the printer!")
+        shutil.copyfile(filepath, server)
+    except:
+        tk.messagebox.showerror("error", "Could not send file to print")
+
+    
+def bat_execute(event=None):
+    filename=filename_var.get()
+    from subprocess import Popen
+    filepath = (save_dir_var.get() + '/' + 'raster.bat')
+      
+    try:
+        p = subprocess.Popen(filepath, shell=True, stdout = subprocess.PIPE)
+        stdout, stderr = p.communicate()
+    except:
+        tk.messagebox.showerror("error", "Could not run batch script")
+
+def test(event=None):
+    import shutil
+    filename=filename_var.get()
+    from subprocess import Popen
+    filepath = (save_dir_var.get() + '/' + filename + '.prn')
+    server = lpname_var
+    shutil.copyfile(filepath, server)
+    tk.messagebox.showerror("error", filepath)
+
+# def set_plname():
+
+#Linux print
+#def print_esc_commands(event=None, PLNAME='def'):
+#    if PLNAME == 'def':
+#        plname = lpname_var.get()
+#    else:
+#        plname = simpledialog.askstring("Set Printer Name", "Linux printer name:", initialvalue=lpname_var.get())
+#        lpname_var.set(plname)
+#    # linux_command = "lp -d "+printersParDict[printerSelected]['linux-name']+" -oraw "+path
+#    save_temp()
+#    try:
+#        subprocess.call(["lp", "-d", plname, "-oraw", path])
+#    except:
+#        tk.messagebox.showerror("Linux Error", "Could not print the data due to a error in Linux, the printername is probably not setup correctly.")
+#
+#
+#
+#def cancel_print_jobs(event=None):
+#    subprocess.call(["cancel", "-a"])
+#    tk.messagebox.showinfo("Print Jobs Canceled", "Success")
 
 # def restart_cups(event=None):
 #     os.system("sudo /etc/init.d/cups restart")
@@ -1266,18 +2306,16 @@ def parse_escp2(event=None):
         else:
             popt=""
 
-        os.system("perl {}/gutenprint/parse-escp2 {}{} > {}/output/parse.txt"
-                  "".format(current_dir, popt, path, current_dir))
-        os.system("xdg-open {}/output/parse.txt".format(current_dir))
+        os.system("perl "+current_dir+"/gutenprint/parse-escp2 "+popt+path+" > "+current_dir+"/output/parse.txt")
+        os.system("xdg-open "+current_dir+"/output/parse.txt")
     # print(subprocess.check_output(["perl", "~/bep/gutenprint5/test/parse-escp2", path]))
 
 
 
 def unprint_escp2(event=None):
     save_temp()
-    os.system("~/gutenprint/test/unprint {} {}/output/temp.pnm"
-              "".format(path, current_dir))
-    os.system("xdg-open {}/output/temp.pnm".format(current_dir))
+    os.system("~/gutenprint/test/unprint " + path + " " + current_dir+"/output/temp.pnm")
+    os.system("xdg-open " + current_dir+"/output/temp.pnm")
     # print(subprocess.check_output(["~/bep/gutenprint5/test/unprint", path]))
 
 
@@ -1286,8 +2324,19 @@ def open_help_pdf(event=None):
     nsy()
 
 
+
+
+
+
+
+
+
+
+
+
 GetButton = ttk.Button(frame_controls, text='Get Data')
 GetButton.bind("<ButtonRelease-1>", get_values)
+
 
 GenerateButton = ttk.Button(frame_controls, text='Generate')
 GenerateButton.bind("<ButtonRelease-1>", run_program)
@@ -1302,18 +2351,31 @@ FilenameEntry = ttk.Entry(frame_controls, textvariable=filename_var, width=50)
 ResetButton = ttk.Button(frame_controls, text="Reset")
 ResetButton.bind("<ButtonRelease-1>", reset_vars)
 
+MoveStageUp = ttk.Button(frame_controls, text='Stage Up')
+MoveStageUp.bind("<ButtonRelease-1>", move_stage_up)
+
+MoveStageDown = ttk.Button(frame_controls, text='Stage Down')
+MoveStageDown.bind("<ButtonRelease-1>", move_stage_down)
+
+TestButton = ttk.Button(frame_controls, text="Test")
+TestButton.bind("<ButtonRelease-1>", test)
+
 SaveFileButton = ttk.Button(frame_controls, text='Save File')
 SaveFileButton.bind("<ButtonRelease-1>", save_output_file)
 
 FolderLabel = ttk.Label(frame_controls, text="Folder: ")
 FilenameLabel = ttk.Label(frame_controls, text="Filename: ")
 
-LinuxLabel = ttk.Label(frame_controls, text="Linux Only:", font=LARGE_FONT)
+ConnectButton = ttk.Button(frame_controls, text="Serial Connect")
+ConnectButton.bind("<ButtonRelease-1>", serial_connect)
+
+SavePrintButton = ttk.Button(frame_controls, text="Save + Print Data")
+SavePrintButton.bind("<ButtonRelease-1>", save_print_esc_commands)
 
 PrintButton = ttk.Button(frame_controls, text="Print Data")
 PrintButton.bind("<ButtonRelease-1>", print_esc_commands)
 
-LinuxPrinterNameLabel = ttk.Label(frame_controls, text="Linux Printer name: ")
+LinuxPrinterNameLabel = ttk.Label(frame_controls, text="Printer name: ")
 LinuxPrinterNameEntry = ttk.Entry(frame_controls, textvariable=lpname_var)
 
 ParseButton = ttk.Button(frame_controls ,text="Parse ESCP2")
@@ -1321,6 +2383,8 @@ ParseButton.bind("<ButtonRelease-1>", parse_escp2)
 
 UnprintButton = ttk.Button(frame_controls, text="Unprint")
 UnprintButton.bind("<ButtonRelease-1>", unprint_escp2)
+
+
 
 ResetButton.grid(row=0, column=0, pady=2, padx=10)
 GetButton.grid(row=1, column=0, pady=2, padx=10)
@@ -1332,11 +2396,15 @@ SaveDirButton.grid(row=0, column=3, pady=2, padx=(10,0))
 FilenameLabel.grid(row=1, column=1, pady=2, sticky="e")
 FilenameEntry.grid(row=1, column=2, pady=2)
 SaveFileButton.grid(row=1, column=3, pady=2, padx=(10,0))
+#TestButton.grid(row=2, column=3, pady=2, padx=(10,0))
+MoveStageUp.grid(row=1, column=4, pady=2, padx=(50,0))
+MoveStageDown.grid(row=2, column=4, pady=2, padx=(50,0))
 
-LinuxLabel.grid(row=0, column=4, pady=2, padx=(100,30))
-PrintButton.grid(row=0, column=5, pady=2, padx=(0,25), sticky="w")
-ParseButton.grid(row=1, column=5, sticky="w")
-UnprintButton.grid(row=2, column=5, sticky="w")
+ConnectButton.grid(row=0, column=4, pady=2, padx=(50,0))
+PrintButton.grid(row=0, column=5, pady=2, padx=(100,0), sticky="w")
+SavePrintButton.grid(row=1, column=5, pady=2, padx=(100,0), sticky="w")
+#ParseButton.grid(row=1, column=5, padx=(100,0), sticky="w")
+#UnprintButton.grid(row=2, column=5, padx=(100,0), sticky="w")
 
 LinuxPrinterNameLabel.grid(row=0, column=6, sticky="e")
 LinuxPrinterNameEntry.grid(row=0, column=7)
@@ -1344,12 +2412,30 @@ LinuxPrinterNameEntry.grid(row=0, column=7)
 # Parse options:
 ParseFrame = ttk.Frame(frame_controls)
 for Ptext, Pmode in ParseOpt:
-    ParseRadiobuttons = ttk.Radiobutton(ParseFrame, text=Ptext,
-                                        variable=ParseOpt_var, value=Pmode)
+    ParseRadiobuttons = ttk.Radiobutton(ParseFrame, text=Ptext, variable=ParseOpt_var, value=Pmode)
     ParseRadiobuttons.pack(side="left")
 ParseFrame.grid(row=1, column=6, columnspan=2, sticky="w")
 
 
 
+
+
+
+
+
+
+
 root.resizable(0,0)
 root.mainloop()
+
+
+
+"""
+TODO:
+
+Print logos, more logos.
+
+
+
+
+"""
