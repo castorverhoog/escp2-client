@@ -1494,7 +1494,7 @@ def load_patterns(event=None):
                     'stretch':      [False, 0],
                     'color' :       [True, 'magenta'],
                     'command' :     [p_logo_TUDelft, 0]},
-        'logo JOB' : {'posx':   [True, 14],
+        'logo JOB' : {'posx':   [True, 166000],
                     'posy':         [True, 5],
                     'dx':           [False, 250],
                     'dy':           [False, 0],
