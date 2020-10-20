@@ -1275,14 +1275,36 @@ def printLOGO(matrix, x=5.5, y=3, size=3, r=b'\x00', **kwargs):
     print(image)
     return image
 
+## LINE FUNCTION: copied from main_gui_interx.py (bep group feb 2018)
+def interx(): #interval x
+    global ox, oy, oxn, ddy #offset x, offset y, offset x number, small feed movement
+    print("Start interx()")
+    ox=0
+    oy=0
+    ddy=y/10
 
+    # option 1: manually
+    #ox=int(input('What horizontal offset do you need? \n'))/(2.54*10000)
+    #oxn=1
+    #ox=dx/(2*oxn)
+    #print('dx = ' + str(dx) + ' inch or ' + str(dx*(2.54*10000)) + ' um') #to check if your dx is correct
+    #print('ox ' + str(ox*(2.54*10000)) + ' um')
 
+    # option 2: calculate for you
+    print('dx = ' + str(dx) + ' inch or ' + str(dx*(2.54*10000)) + ' um') #to check if your dx is correct
+    dx_um = dx*2.54*10000
+    print('dx_um ' + str(dx_um) + ' um')
+    d_dot=40 #um
+    ox = 0.25 * d_dot # quarter dot overlap
+    print('ox ' + str(ox) + ' um')
+    oxn = round(dx_um/ox) # times printing to fill the stroke
+    print('oxn ' + str(oxn))
+    ox = dx/oxn # in inches. Not anymore in um
+    print('ox ' + str(ox*(2.54*10000)) + ' um')
 
-
-
-
-
-
+    # create code that prints the same drop but a line feed further down such that
+    # you dont need to keep replacing the paper
+    print("End interx()")
 
 
 ## LOAD BITMAP FUNCTIONS
@@ -2221,9 +2243,15 @@ def get_values(event=None):
     print("Values geGet")
 
 
+
 def run_program(event=None):
     global rasterdata, body, header, footer, totaldata
     get_values()
+    
+    
+    #geen idee of dit hier moet
+    interx()
+    
     header = load_prn_file('prns/' + prnname + '/' + prnname + '-header.prn')
     footer = load_prn_file('prns/' + prnname + '/' + prnname + '-footer.prn')
 
