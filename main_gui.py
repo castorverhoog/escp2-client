@@ -1263,7 +1263,7 @@ def printLOGO(matrix, x=5.5, y=3, size=3, r=b'\x00', **kwargs):
     rasterdata = b''
     i = 0
     for k in range(len(matrix)):
-        if k > 60 && k <= 90:
+        if (k > 60 && k <= 90):
             rasterdata += (ESC_dollar(hor, x + ( k-60 ) * dx) + ESC_i_nrs(matrix[k], black3, size))
             continue
         else if k > 30 && k <= 60:
