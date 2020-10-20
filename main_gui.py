@@ -1255,16 +1255,24 @@ def printTUPME(x=5, y=3, size=3, color=b'\x00', rep=1, **kwargs):
 
 
 def printLOGO(matrix, x=5.5, y=3, size=3, r=b'\x00', **kwargs):
-    pmgmt = 720
-    hor = 5760
-    vert = 720
-    color = r
+    # pmgmt = 720
+    # hor = 5760
+    # vert = 720
     dy = 0
     dx = (dy + 1) * (1 / 120)
     rasterdata = b''
+    i = 0
     for k in range(len(matrix)):
-        rasterdata += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k], color, size))
+        if k > 60 && k <= 90:
+            rasterdata += (ESC_dollar(hor, x + ( k-60 ) * dx) + ESC_i_nrs(matrix[k], black3, size))
+            continue
+        else if k > 30 && k <= 60:
+            rasterdata += (ESC_dollar(hor, x + ( k-30 ) * dx) + ESC_i_nrs(matrix[k], black2, size))
+            continue
+        else:
+            rasterdata += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k], black, size))
     image = rasterdata
+    print(image)
     return image
 
 
