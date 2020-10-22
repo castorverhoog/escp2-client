@@ -1264,10 +1264,10 @@ def printLOGO(matrix, x=5.5, y=3, size=3, r=b'\x00', **kwargs):
     rasterdata2 = b''
     rasterdata3 = b''
     for k in range(len(matrix)):
-        rasterdata1 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[::-1][k][0:30], black, size))
+        rasterdata1 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[::-1][k][0:30], black3, size))
         rasterdata2 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[::-1][k][30:60], black2, size))
-        rasterdata3 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[::-1][k][60:90], black3, size))
-    image = rasterdata3 + rasterdata2 + rasterdata1
+        rasterdata3 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[::-1][k][60:90], black, size))
+    image = rasterdata1 + rasterdata2 + rasterdata3
     return image
 
 ## LINE FUNCTION: copied from main_gui_interx.py (bep group feb 2018)
