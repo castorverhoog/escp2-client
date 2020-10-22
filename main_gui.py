@@ -1264,9 +1264,9 @@ def printLOGO(matrix, x=5.5, y=3, size=3, r=b'\x00', **kwargs):
     rasterdata2 = b''
     rasterdata3 = b''
     for k in range(len(matrix)):
-        rasterdata1 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k][0:30], black, size))
-        rasterdata2 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k][30:60], black2, size))
-        rasterdata3 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k][60:90], black3, size))
+        rasterdata1 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k][0:30:-1], black, size))
+        rasterdata2 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k][30:60:-1], black2, size))
+        rasterdata3 += (ESC_dollar(hor, x + k * dx) + ESC_i_nrs(matrix[k][60:90:-1], black3, size))
         print(matrix[k][0:30])
         print(matrix[k][30:60])
         print(matrix[k][60:90])
